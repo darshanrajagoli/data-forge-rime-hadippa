@@ -201,7 +201,7 @@ def test_env_local_if_present_is_gitignored() -> None:
 # reported the vendor's error hierarchy as leaked credentials -- and the
 # pre-commit hook blocked any commit containing real tool output. Six places in
 # this repository format errors as f"{type(exc).__name__}: {exc}", and
-# docs/MEASUREMENTS.md explicitly asks the reader to paste failures in.
+# team/worksheets/MEASUREMENTS.md explicitly asks the reader to paste failures in.
 #
 # Every fixture below is composed at runtime so that no line in this file holds
 # a complete credential-shaped literal. That is deliberate: this file is itself
@@ -262,6 +262,91 @@ def test_the_allowlist_is_exact_not_a_prefix_match() -> None:
     assert "API" + "ConnectionError" in VENDOR_IDENTIFIERS
     composed = "API" + "ConnectionError" + "AAAA"
     assert hits("k = " + Q + composed + Q + NL), "a key prefixed by a vendor name is still a key"
+
+
+# --------------------------------------------------------------------------
+# A key hiding behind a vendor name
+#
+# The two tests above put the key alone on the line, and that is why they both
+# passed against a scanner that could not see this:
+#
+#     APIStatusError: message='Invalid response status', key=API<real key>
+#
+# `scan_text` called `pattern.search(line)` -- the *first* match -- and on an
+# allowlist hit did `continue`, which abandoned the whole rule for that line
+# rather than that one match. Everything after the vendor name went unread.
+#
+# That is not a contrived line. It is the shape already sitting in
+# evidence/results/latency.md, and team/worksheets/MEASUREMENTS.md instructs the reader to
+# paste real tool output into the repository. A scanner blind to it reports
+# `clean` on a committed credential, and "exposes a live credential" is a
+# listed disqualifier.
+#
+# These tests state the property rather than the case: position on the line
+# must not affect detection, in either order, for every vendor name and every
+# key shape. A test written to kill one specific mutant would have passed
+# against the bug it was supposed to prevent -- which is what happened.
+# --------------------------------------------------------------------------
+
+
+def _vendor_noise(name: str) -> str:
+    """The exact prose LiveKit produces, minus any credential."""
+    return name + ": message=" + Q + "Invalid response status" + Q + ", status_code=401"
+
+
+@pytest.mark.parametrize("vendor", VENDOR_NAMES)
+@pytest.mark.parametrize("tail", KEY_TAILS)
+def test_a_key_after_a_vendor_name_on_the_same_line_is_found(
+    vendor: str, tail: str
+) -> None:
+    """The false negative. Thirty combinations, all previously missed."""
+    key = "API" + tail
+    line = _vendor_noise("API" + vendor) + ", key=" + key
+    assert hits(line + NL), "missed " + key + " behind API" + vendor
+
+
+@pytest.mark.parametrize("vendor", VENDOR_NAMES)
+@pytest.mark.parametrize("tail", KEY_TAILS)
+def test_a_key_before_a_vendor_name_on_the_same_line_is_found(
+    vendor: str, tail: str
+) -> None:
+    """The mirror case, which `search` happened to get right. Both directions
+    are asserted so that a future "optimisation" back to first-match-only
+    fails here too, not only in the test above."""
+    key = "API" + tail
+    line = "key=" + key + " raised " + _vendor_noise("API" + vendor)
+    assert hits(line + NL), "missed " + key + " before API" + vendor
+
+
+def test_the_exact_line_shape_already_committed_to_this_repository() -> None:
+    """evidence/results/latency.md really does contain this, minus the key."""
+    key = "API" + "n8Kd93mZq7Lx2Vb0Rt"
+    line = (
+        "  cold/websocket: API" + "StatusError: message=" + Q
+        + "Invalid response status" + Q + ", status_code=401, key=" + key
+    )
+    assert hits(line + NL), "the scanner is blind to the shape it already ships"
+
+
+@pytest.mark.parametrize("vendor", VENDOR_NAMES)
+def test_several_vendor_names_do_not_exhaust_the_scanner(vendor: str) -> None:
+    key = "API" + "Rb7kQm2xLp9w"
+    line = (
+        "except (API" + "ConnectionError, API" + "TimeoutError, API" + vendor
+        + "): retry(" + key + ")"
+    )
+    assert hits(line + NL), "gave up before reaching the key"
+
+
+def test_the_noise_property_survives_the_fix() -> None:
+    """The allowlist still has to do its original job: a line of nothing but
+    vendor identifiers must not block a commit. Restoring detection is only a
+    fix if it does not reintroduce the false positives."""
+    for vendor in VENDOR_NAMES:
+        name = "API" + vendor
+        assert hits("    ! " + _vendor_noise(name) + NL) == [], "cried wolf on " + name
+    assert hits("except (API" + "StatusError, API" + "TimeoutError):" + NL) == []
+    assert hits("raise API" + "ConnectionError(" + Q + "rime unreachable" + Q + ")" + NL) == []
 
 
 # --------------------------------------------------------------------------

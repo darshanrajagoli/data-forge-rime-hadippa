@@ -1,14 +1,14 @@
 # Listening notes
 
-> **Owner: Rahul.** Fill every `TODO` after doing the listening test in Lane C
-> of `WORKFLOW.md`. The method is in [`LISTENING_TEST.md`](LISTENING_TEST.md).
+> **Worksheet — not a document for judges.** Fill every `TODO` after doing the listening test in your lane
+> in `team/WORKFLOW.md`. The method is in [`docs/LISTENING_TEST.md`](../../docs/LISTENING_TEST.md).
 > Delete this blockquote when you are done.
 
 **Listener:** TODO (name) · **Date:** TODO
 **Playback device:** TODO — say exactly what. Earbuds, over-ear headphones and
 laptop speakers are three different measurements, and a driver is on none of
 them.
-**Clips:** [`../evidence/results/pronunciation/`](../evidence/results/pronunciation/)
+**Clips:** [`evidence/results/pronunciation/`](../../evidence/results/pronunciation/)
 
 ## Method
 

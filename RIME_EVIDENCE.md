@@ -94,7 +94,7 @@ Full output, regenerated on every run:
 ### Test suite
 
 ```bash
-pytest        # 425 passed in ~6s
+pytest        # 549 passed in ~6s
 ```
 
 | File | Tests | Covers |
@@ -215,7 +215,7 @@ finished. Each found real defects. The second one found the worst.
     The LiveKit key rule matches `API` + 10 characters, which is also the shape
     of `APIConnectionError`, `APIStatusError`, `APITimeoutError` and
     `APIConnectOptions`. Six places in this repository format errors as
-    `type(exc).__name__`, and `docs/MEASUREMENTS.md` asks the reader to paste
+    `type(exc).__name__`, and `team/worksheets/MEASUREMENTS.md` asks the reader to paste
     failures in — so the pre-commit hook would have blocked a commit and
     reported a credential leak in a line containing none. Fixed with an
     allowlist **subtracted from matches**, not by narrowing the pattern: the
@@ -255,7 +255,7 @@ installed code rather than recalled:
 
 ### Do the tests mean anything? Mutation testing
 
-"425 tests pass" is not evidence. A suite that stays green when you break the
+"549 tests pass" is not evidence. A suite that stays green when you break the
 code it guards is worse than no suite, because it converts absence of signal
 into confidence. So the claim is checked directly:
 
@@ -453,6 +453,25 @@ id, so the same barge-in observed from three places costs one generation.
    `_unverified_`.
 9. **Single language, no persistence.** `RIME_LANG=eng`; dispatch state is
    in-memory.
+10. **The audible half of this submission is unmeasured, and the artifacts say
+    so.** Everything in section 3 runs offline against no credential, and it is
+    the part we can prove. The parts that need a Rime key — time-to-first-audio,
+    the transport comparison, and whether the respelling layer actually makes
+    `Gough` and `Guerrero` intelligible to a human ear — have not been run at
+    the time of writing. `evidence/results/latency.md` therefore ships with an
+    empty results table and the two `401`s that produced it;
+    `evidence/results/pronunciation/report.md` ships with `Audio rendered:
+    false` and every verdict `_unverified_`. Those files are not placeholders
+    we forgot to fill. They are what this repository looks like when it has
+    nothing to report, and we would rather claim nothing than a number nobody
+    can reproduce. Anyone with a Rime key can close the gap with two commands,
+    both in section 5.
+11. **The turn fence has been proven against a simulator, not a human voice.**
+    The six acceptance scenarios drive the real agent code and inject the
+    barge-in themselves, which is what makes them reproducible on any machine
+    with no key — and is also exactly what they cannot prove. Whether LiveKit's
+    VAD fires on a real interruption at a real interruption threshold, in a
+    room with real noise, is a question only a live session answers.
 
 ---
 

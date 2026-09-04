@@ -1,6 +1,6 @@
 # Independent verification
 
-> **Owner: Akshay.** Fill every `TODO` after doing Lane D of `WORKFLOW.md`.
+> **Worksheet — not a document for judges.** Fill every `TODO` after doing your lane in `team/WORKFLOW.md`.
 > Delete this blockquote when you are done.
 >
 > You are standing in for a judge. Behave like someone who has never seen this
@@ -19,10 +19,10 @@
 |---|---|---|---|
 | Clone | `git clone <repo>` | TODO | TODO |
 | Install | `pip install -e ".[dev]"` | TODO | TODO |
-| Test suite | `pytest` | TODO (expect: 425 passed) | TODO |
+| Test suite | `pytest` | TODO (expect: 549 passed) | TODO |
 | Acceptance | `python evidence/run_acceptance.py` | TODO (expect: 6/6, 36 checks) | TODO |
 | Mutation test (core) | `python evidence/mutation_test.py` | TODO (expect: 15/15) | TODO |
-| Mutation test (wiring) | `python evidence/mutation_test_ii.py` | TODO (expect: 13/13) | TODO |
+| Mutation test (wiring) | `python evidence/mutation_test_ii.py` | TODO (expect: 19/19) | TODO |
 | Secret scan | `python scripts/secret_scan.py` | TODO (expect: clean) | TODO |
 | Offline preflight | `python scripts/preflight.py --offline` | TODO | TODO |
 

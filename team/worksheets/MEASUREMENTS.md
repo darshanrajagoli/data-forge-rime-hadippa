@@ -1,7 +1,7 @@
 # Measurements
 
-> **Owner: Arya.** Fill every `TODO` from the reports you generate in Lane B of
-> `WORKFLOW.md`. Delete this blockquote when you are done.
+> **Worksheet — not a document for judges.** Fill every `TODO` from the reports you generate in your lane in
+> `team/WORKFLOW.md`. Delete this blockquote when you are done.
 >
 > Report what the tools actually printed. A modest number with an honest method
 > beats a good number nobody can reproduce — and the brief says unverified
@@ -58,6 +58,6 @@ from the transcript. The exact path has zero error by construction.
 
 - TODO sample sizes. Anything under n=10 is indicative, not a service level.
 - One machine, one network, one physical location, one voice, one language.
-- Nothing here measures intelligibility — that is `docs/LISTENING_NOTES.md`.
+- Nothing here measures intelligibility — that is `team/worksheets/LISTENING_NOTES.md`.
 - TODO — anything that failed, looked odd, or you could not explain. Write it
   down. An unexplained result reported is worth more than one quietly dropped.

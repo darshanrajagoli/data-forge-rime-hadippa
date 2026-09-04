@@ -1,6 +1,6 @@
 # Waypoint
 
-[![verify](https://github.com/REPLACE-ME/waypoint/actions/workflows/ci.yml/badge.svg)](https://github.com/REPLACE-ME/waypoint/actions/workflows/ci.yml)
+[![verify](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml/badge.svg)](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml)
 
 **A hands-free dispatch copilot for delivery drivers, built on LiveKit Agents with Rime as the primary spoken output.**
 
@@ -93,7 +93,7 @@ git clone <this repo> && cd waypoint
 python -m venv .venv && . .venv/Scripts/activate   # Linux/macOS: . .venv/bin/activate
 pip install -e ".[dev]"
 
-pytest                                  # 425 tests, ~6s, no network
+pytest                                  # 549 tests, ~20s, no network
 python evidence/run_acceptance.py        # the 6 acceptance scenarios
 ```
 
@@ -268,7 +268,7 @@ ignored every marker still could not commit a stale write, because
 | What | Command | Needs a key? | Output |
 |---|---|---|---|
 | The six acceptance scenarios | `python evidence/run_acceptance.py` | no | [`reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Test suite | `pytest` | no | 425 passing |
+| Test suite | `pytest` | no | 549 passing |
 | Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | `results/latency.md` |
 | Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | `results/pronunciation/` |
 | Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | yes | `results/heard_accuracy.md` |
@@ -279,7 +279,7 @@ The full claim, acceptance test, procedure and limitations are in
 
 ### The tests are checked too
 
-`pytest` reporting 425 passes is not evidence on its own — a suite that stays
+`pytest` reporting 549 passes is not evidence on its own — a suite that stays
 green when you break the code it guards converts absence of signal into
 confidence. So there are two mutation harnesses, and between them 28 targets:
 
@@ -297,11 +297,11 @@ The second harness exists because the first one had a shape. All fifteen of its
 targets land in code a unit test calls directly, and **9 of the first 12
 mutations written against the wiring layer survived** — including
 `interruption {"enabled": False}`, which disables the only feature this product
-has. All 425 tests, all six acceptance scenarios and the first harness's 15/15
+has. All 549 tests, all six acceptance scenarios and the first harness's 15/15
 stayed green with barge-in switched off. `tests/test_wiring.py` and
 `tests/test_preflight.py` were written to close that, and did.
 
-Current result: **15/15 and 13/13 — 28 of 28, none surviving.** Both run in CI.
+Current result: **15/15 and 19/19 — 34 of 34, none surviving.** Both run in CI.
 
 ### Verified continuously, on hardware we do not control
 
@@ -435,3 +435,40 @@ behaviour quoted above was verified by reading that file, not recalled. Two
 design bugs (fence-sync ordering, and turn-origin retirement) were found by the
 test suite and the acceptance harness during development and are documented at
 their fix sites.
+
+## Repository map
+
+| Path | What it is |
+|---|---|
+| **[`HANDOFF.md`](HANDOFF.md)** | **Start here.** The whole project in one file — what it is, what is proven, what is not, and how to run everything. Written to be the only file a new reader (or a language model) needs. |
+| [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) | Every claim, with the command that checks it. Section 7 is the limitations, and it is honest. |
+| [`SUBMISSION.md`](SUBMISSION.md) | The submission itself, mapped to the brief's rubric. |
+| [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md) | The demo, shot by shot, with every line written out. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the pieces fit, and why. |
+| [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | What the fence does not cover, analysed rather than asserted. |
+| [`docs/DATA.md`](docs/DATA.md) | Where the synthetic manifest comes from. |
+| [`docs/LISTENING_TEST.md`](docs/LISTENING_TEST.md) | The protocol for judging pronunciation by ear. |
+| **[`docs/audits/`](docs/audits/)** | **Three independent adversarial reviews, kept in full.** Each has a header mapping every finding to its fix. See below. |
+| [`team/`](team/) | Internal working documents and worksheets. Not written for judges. |
+
+### The audits
+
+This repository ships the three reviews that were run against it, complete,
+including everything they found. That is deliberate. A submission claiming to be
+adversarially tested should be able to show the adversary's report.
+
+- [`AUDIT-2.md`](docs/audits/AUDIT-2.md) — found ten defects, every one *outside*
+  the tested modules. Headline: no script in the repository could make a single
+  Rime API call in any configuration, so the preflight everyone was told to run
+  before recording could never have passed.
+- [`AUDIT-3.md`](docs/audits/AUDIT-3.md) — asked who tests the code that
+  manufactures the proof. Nobody did: one token made all 36 acceptance checks
+  vacuous while the whole suite stayed green. It also defeated two of the fixes
+  AUDIT-2 had prompted, including a credential scanner blind to a key sharing a
+  line with an error-class name.
+- [`RED-TEAM-PROMPT-3.md`](docs/audits/RED-TEAM-PROMPT-3.md) — the prompt used
+  for the third pass, if you want to run a fourth.
+
+Every code finding from all three is fixed. The two that remain open —
+no demo video, and no audio ever synthesised — need a person and an API key, and
+are stated as limitations 10 and 11 in `RIME_EVIDENCE.md` rather than glossed.

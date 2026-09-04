@@ -73,6 +73,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -105,6 +106,32 @@ from .prompts import SUPERSEDED_MARKER, build_instructions, GREETING
 from .pronounce import Strategy, speak_address, speak_code, speak_house_number, render
 
 logger = logging.getLogger("waypoint")
+
+
+def session_evidence_dir() -> Path:
+    """Where a live run leaves its audit trail.
+
+    Resolved from ``__file__``, the way every other path in this repository is
+    -- ``scripts/``, ``evidence/`` and ``web/`` all derive a ``ROOT`` that way.
+    This one site used ``Path("evidence/results/sessions")``, which is relative
+    to the process's working directory, and the agent is started as
+    ``python -m waypoint.agent dev`` from wherever the operator happens to be
+    standing. Run it from a home directory and the fence audit trail, the
+    metrics and the heard-log were written to ``~/evidence/results/sessions``
+    -- outside the repository, with the failure swallowed by ``except
+    OSError``.
+
+    That is an unlucky path for the *one* code path that captures proof a real
+    session happened, which is this submission's thinnest evidence.
+
+    ``WAYPOINT_EVIDENCE_DIR`` overrides it, for a non-editable install (where
+    ``parents[2]`` lands in site-packages) and for tests.
+    """
+    override = os.environ.get("WAYPOINT_EVIDENCE_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(__file__).resolve().parents[2] / "evidence" / "results" / "sessions"
+
 
 FENCE_TOPIC = "waypoint.fence"
 
@@ -671,9 +698,9 @@ def build_tts(settings: Settings) -> rime.TTS:
         "lang": settings.rime_lang,
         "sample_rate": settings.rime_sample_rate,
         "speed_alpha": settings.rime_speed_alpha,
-        "use_websocket": settings.rime_use_websocket,
+        "use_websocket": settings.effective_use_websocket,
     }
-    if settings.rime_use_websocket:
+    if settings.effective_use_websocket:
         kwargs["segment"] = settings.rime_segment
     if settings.rime_base_url:
         kwargs["base_url"] = settings.rime_base_url
@@ -695,7 +722,12 @@ def build_session(settings: Settings, deps: Deps) -> AgentSession:
         vad=silero.VAD.load(),
         # Rime's WebSocket stream carries word timestamps; this is what routes
         # them into transcription_node, and therefore into heard-not-said.
-        use_tts_aligned_transcript=settings.rime_use_websocket,
+        #
+        # `effective_use_websocket`, not the raw flag: the plugin upgrades the
+        # transport from a `wss://` override, and reading the raw flag here
+        # declined timestamps that were already arriving. See
+        # `Settings.effective_use_websocket`.
+        use_tts_aligned_transcript=settings.effective_use_websocket,
         turn_handling=TurnHandlingOptions(
             interruption={
                 "enabled": True,
@@ -816,7 +848,7 @@ async def entrypoint(ctx: JobContext) -> None:
     async def _dump() -> None:
         """Write the session's audit trail so a run leaves evidence behind."""
         logger.info("fence stats: %s", deps.fence.stats())
-        out = Path("evidence/results/sessions")
+        out = session_evidence_dir()
         try:
             out.mkdir(parents=True, exist_ok=True)
             stamp = time.strftime("%Y%m%dT%H%M%S")
@@ -837,8 +869,19 @@ async def entrypoint(ctx: JobContext) -> None:
             )
             logger.info("wrote session evidence to %s", out)
         except OSError:
-            logger.warning("could not write session evidence", exc_info=True)
+            # Loud, and with the path in it. This is the only artifact proving
+            # a real session happened; a swallowed failure here is the
+            # difference between having recorded evidence and thinking you did.
+            logger.warning(
+                "COULD NOT WRITE SESSION EVIDENCE to %s -- the recording has no "
+                "audit trail. Set WAYPOINT_EVIDENCE_DIR to a writable path.",
+                out,
+                exc_info=True,
+            )
 
+    # Said before the session starts, not after it ends: the operator needs to
+    # know where to look while they are still set up to record.
+    logger.info("session evidence will be written to %s", session_evidence_dir())
     ctx.add_shutdown_callback(_dump)
 
     await session.start(

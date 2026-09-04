@@ -85,7 +85,7 @@ PLACEHOLDERS = re.compile(
 #: That is not theoretical. Six places in this repository format errors as
 #: ``f"{type(exc).__name__}: {exc}"``, and for any Rime or LiveKit failure that
 #: name *is* one of these. The moment someone pastes real tool output into
-#: ``docs/MEASUREMENTS.md`` -- which that file explicitly asks them to do -- the
+#: ``team/worksheets/MEASUREMENTS.md`` -- which that file explicitly asks them to do -- the
 #: pre-commit hook blocks the commit and reports a credential leak in a line
 #: containing no credential. At 3am that reads as "I have burned a key."
 #:
@@ -94,9 +94,21 @@ PLACEHOLDERS = re.compile(
 #: rejecting CamelCase tails (``API(?![A-Z][a-z])...``), and it is wrong: it
 #: also rejects real keys whose fourth character is a capital followed by a
 #: lowercase, e.g. ``API`` + ``Rb7kQm2xLp9w``. That is a false negative in a
-#: security control, which is strictly worse than the noise it removes. This
-#: list can only ever reduce noise; it cannot reduce detection.
-#: See ``tests/test_secret_scan.py::test_a_real_key_shaped_like_a_vendor_name``.
+#: security control, which is strictly worse than the noise it removes.
+#:
+#: "Subtracted from matches" is a claim about the *scan loop*, not about this
+#: list, and for one revision the loop did not honour it: it matched with
+#: ``re.search`` and skipped the whole rule on an allowlist hit, so a real key
+#: sharing a line with a vendor name was never looked at. The list was
+#: innocent; the loop reduced detection. It now iterates every match on the
+#: line and skips only the allowlisted ones, which is what makes the sentence
+#: below true rather than merely intended.
+#:
+#: With that loop, this list can only ever reduce noise; it cannot reduce
+#: detection. Both halves are tested, and the second half is tested in both
+#: orders: see ``tests/test_secret_scan.py`` --
+#: ``test_a_real_key_shaped_like_a_vendor_name_is_still_flagged`` and
+#: ``test_a_key_after_a_vendor_name_on_the_same_line_is_found``.
 VENDOR_IDENTIFIERS = frozenset({
     "APIConnectionError",
     "APIConnectOptions",
@@ -196,13 +208,31 @@ def scan_text(path: Path, text: str, rel: str) -> list[Finding]:
         for rule, pattern in RULES:
             if template and rule != "private key block":
                 continue
-            m = pattern.search(line)
-            if not m:
-                continue
-            # A public vendor class name is not a credential. Subtracting the
-            # match keeps the key pattern at full sensitivity; narrowing the
-            # pattern would not.
-            if m.group(0) in VENDOR_IDENTIFIERS:
+            # ``finditer``, not ``search``. The allowlist check skips a
+            # *match*; with ``search`` it skipped the whole rule for the line,
+            # because ``search`` only ever returns the first match. So a line
+            # carrying a vendor class name *before* a real key went unscanned
+            # past that class name -- a false negative in a security control,
+            # which is precisely what the note on VENDOR_IDENTIFIERS promises
+            # this design cannot produce.
+            #
+            # Not hypothetical. ``evidence/results/latency.md`` already reads
+            # ``APIStatusError: message='Invalid response status', ...``, and
+            # ``team/worksheets/MEASUREMENTS.md`` asks a human to paste real tool output
+            # into the repository. One key in one such line and the scanner
+            # reported ``clean``.
+            #
+            # See ``tests/test_secret_scan.py`` -- "a key hiding behind a
+            # vendor name".
+            m = next(
+                (
+                    hit
+                    for hit in pattern.finditer(line)
+                    if hit.group(0) not in VENDOR_IDENTIFIERS
+                ),
+                None,
+            )
+            if m is None:
                 continue
             excerpt = line.strip()
             if len(excerpt) > 120:

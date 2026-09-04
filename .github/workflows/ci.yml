@@ -106,15 +106,18 @@ jobs:
       - name: Mutation test - core
         # Exits non-zero if any deliberate bug survives the suite, so a hole in
         # the tests fails the build rather than sitting unnoticed behind a
-        # green checkmark.
+        # green checkmark. 15 targets, all in src/waypoint/.
         run: python evidence/mutation_test.py
 
       - name: Mutation test - wiring, contract and gates
-        # A second table, covering the layer the first one cannot reach: the
+        # A second table, covering the layers the first one cannot reach: the
         # Settings-to-session wiring, the Rime values that are only wrong
-        # against the live catalog, the system prompt, and the two scripts that
-        # stand in for the brief's disqualifiers. When this was first written
-        # 9 of its 12 mutants survived, including barge-in disabled entirely.
+        # against the live catalog, the system prompt, the two scripts that
+        # stand in for the brief's disqualifiers, and -- group E -- the
+        # acceptance harness itself. When this was first written 9 of its 12
+        # mutants survived, including barge-in disabled entirely; a later
+        # review showed one token could make all 36 acceptance checks vacuous
+        # while every other job here stayed green.
         run: python evidence/mutation_test_ii.py
 
       - name: Working tree is unchanged
@@ -151,7 +154,8 @@ jobs:
           bad = []
           # docs/**/*.md, not docs/*.md -- the archived audits live in a
           # subdirectory and their links need checking too.
-          for f in list(root.glob("*.md")) + list(root.glob("docs/**/*.md")):
+          for f in (list(root.glob("*.md")) + list(root.glob("docs/**/*.md"))
+                    + list(root.glob("team/**/*.md"))):
               for m in link.finditer(f.read_text(encoding="utf-8")):
                   u = m.group(1).strip()
                   if u.startswith(("http://", "https://", "mailto:", "<")):

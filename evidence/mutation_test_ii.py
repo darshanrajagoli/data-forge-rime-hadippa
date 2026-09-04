@@ -104,7 +104,7 @@ MUTANTS: list[tuple[str, str, str, str, str, str]] = [
         "the shipped transport silently becomes HTTP",
         "B",
         "src/waypoint/agent.py",
-        '        "use_websocket": settings.rime_use_websocket,',
+        '        "use_websocket": settings.effective_use_websocket,',
         '        "use_websocket": False,',
         "Kills streaming, kills aligned transcripts, kills word timestamps, "
         "and changes the endpoint -- while the banner still prints "
@@ -114,7 +114,7 @@ MUTANTS: list[tuple[str, str, str, str, str, str]] = [
         "word timestamps never reach the agent",
         "B",
         "src/waypoint/agent.py",
-        "        use_tts_aligned_transcript=settings.rime_use_websocket,",
+        "        use_tts_aligned_transcript=settings.effective_use_websocket,",
         "        use_tts_aligned_transcript=False,",
         "transcription_node stops receiving TimedString deltas, so "
         "heard-not-said degrades to the estimator with no disclosure.",
@@ -188,6 +188,72 @@ MUTANTS: list[tuple[str, str, str, str, str, str]] = [
         "Exposing a live credential is a stated disqualifier. Included as a "
         "control: this one SHOULD be caught, because tests/test_secret_scan.py "
         "exists. If it is, the contrast is the finding.",
+    ),
+    (
+        "a key hiding behind a vendor name is not seen",
+        "D",
+        "scripts/secret_scan.py",
+        "                    for hit in pattern.finditer(line)",
+        "                    for hit in list(pattern.finditer(line))[:1]",
+        "First-match-only, which is the shipped bug restored: `search` returned "
+        "one match, so skipping an allowlisted one skipped the whole rule for "
+        "that line and a real key sharing a line with `APIStatusError` went "
+        "unread. That is the shape already in evidence/results/latency.md.",
+    ),
+    # -- E: the harness that manufactures the evidence ---------------------
+    #
+    # The region the first two reviews never looked at. `evidence/` produced
+    # every artifact this submission offers as proof and had 0% coverage and
+    # zero mutation targets, so the argument "the tests would fail if the code
+    # broke" was never made about the code that decides whether the tests
+    # failed. Each mutant below is a way to make `run_acceptance.py` report
+    # `6/6 scenarios passed` while proving nothing.
+    (
+        "the acceptance harness stops checking",
+        "E",
+        "evidence/run_acceptance.py",
+        "        self.checks.append(Check(label, bool(condition), detail))",
+        "        self.checks.append(Check(label, True, detail))",
+        "One token. Every acceptance claim becomes vacuous, the run exits 0, "
+        "and it overwrites its committed artifacts green -- demonstrated by a "
+        "reviewer on a build whose fence had been inverted to speak stale "
+        "results. Caught only by tests/test_acceptance_harness.py.",
+    ),
+    (
+        "a scenario that checked nothing reports PASS",
+        "E",
+        "evidence/run_acceptance.py",
+        "        return bool(self.checks) and all(c.passed for c in self.checks)",
+        "        return all(c.passed for c in self.checks)",
+        "`all([])` is True. Empty a scenario and it renders PASS with 0/0 "
+        "beside it while the totals still add up.",
+    ),
+    (
+        "a dropped scenario is not noticed",
+        "E",
+        "evidence/run_acceptance.py",
+        "    missing = [i for i in EXPECTED_SHAPE if i not in ids]",
+        "    missing = []",
+        "Remove a scenario from SCENARIOS and the run reports 5/5 passed, "
+        "exit 0. `0/0 scenarios passed` exits 0 too.",
+    ),
+    (
+        "the harness self-audit is advisory",
+        "E",
+        "evidence/run_acceptance.py",
+        "    return 1 if (failed or problems) else 0",
+        "    return 1 if failed else 0",
+        "The audit still runs and still prints, but a malformed run exits 0, "
+        "so CI stays green and uploads the artifact.",
+    ),
+    (
+        "the artifact does not disclose a broken harness",
+        "E",
+        "evidence/run_acceptance.py",
+        '    if meta.get("harness_intact", True):',
+        "    if True:",
+        "acceptance.md is what CI uploads and a judge reads. This makes it "
+        "claim an intact harness unconditionally.",
     ),
 ]
 
@@ -278,6 +344,7 @@ CATEGORY_NAMES = {
     "B": "wiring (the untested Settings-to-session layer)",
     "C": "prompt / delivery (what is actually spoken)",
     "D": "gates (the brief's disqualifiers)",
+    "E": "the harness that manufactures the evidence",
 }
 
 

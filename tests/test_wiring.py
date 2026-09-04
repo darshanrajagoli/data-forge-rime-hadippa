@@ -31,7 +31,12 @@ like a fluke.
 
 from __future__ import annotations
 
+import inspect
+from pathlib import Path
+
 import pytest
+
+import waypoint.agent
 
 from waypoint.agent import attach_observers, build_session, build_tts, Deps
 from waypoint.config import (
@@ -90,15 +95,89 @@ def test_build_tts_uses_the_model_and_voice_it_discloses() -> None:
     assert f"lang={s.rime_lang}" in url
 
 
+#: Every combination of the two variables that decide the transport. The
+#: fourth row is the one that broke: the plugin upgrades a `false` flag from
+#: the URL scheme, so Waypoint disclosed HTTP, warned about a degradation that
+#: was not happening, and -- worse than either -- passed
+#: `use_tts_aligned_transcript=False`, declining word timestamps that were
+#: already on the wire.
+#:
+#: Written as a cross-product rather than as the one failing case on purpose.
+#: The previous test opened by asserting the shipped default and therefore
+#: excluded exactly the configuration that was wrong.
+TRANSPORT_MATRIX = [
+    (True, None),
+    (True, "wss://users-ws.rime.ai"),
+    (True, "ws://localhost:9000"),
+    (True, "https://users.rime.ai/v1/rime-tts"),
+    (False, None),
+    (False, "wss://users-ws.rime.ai"),
+    (False, "ws://localhost:9000"),
+    (False, "https://users.rime.ai/v1/rime-tts"),
+]
+
+
+@pytest.mark.parametrize("flag,base_url", TRANSPORT_MATRIX)
+def test_the_disclosed_transport_is_the_one_the_plugin_uses(
+    flag: bool, base_url: str | None
+) -> None:
+    """Checked against the installed plugin, not against our own belief.
+
+    `capabilities.streaming` is what the framework dispatches on, so it is the
+    ground truth for which transport a configuration actually gets. If Rime
+    changes the inference rule, this fails instead of the banner going quietly
+    wrong.
+    """
+    s = Settings(
+        rime_use_websocket=flag,
+        rime_base_url=base_url,
+        rime_api_key="placeholder-rime-key",
+    )
+    actual = build_tts(s).capabilities.streaming
+    assert s.effective_use_websocket is actual, (
+        f"RIME_USE_WEBSOCKET={flag}, RIME_BASE_URL={base_url!r}: "
+        f"disclosing {s.transport} but the plugin streams={actual}"
+    )
+    assert (s.transport == "WebSocket (wss)") is actual
+    assert ("exact" in s.heard_method) is actual
+
+
+@pytest.mark.parametrize("flag,base_url", TRANSPORT_MATRIX)
+def test_word_timestamps_are_requested_exactly_when_available(
+    flag: bool, base_url: str | None
+) -> None:
+    """The functional half of the same bug.
+
+    `use_tts_aligned_transcript` is what routes TimedStrings into
+    `transcription_node`, and therefore what makes heard-not-said exact rather
+    than estimated. Reading the raw flag here silently downgraded it.
+    """
+    s = Settings(
+        rime_use_websocket=flag,
+        rime_base_url=base_url,
+        rime_api_key="placeholder-rime-key",
+    )
+    streaming = build_tts(s).capabilities.streaming
+    assert s.effective_use_websocket is streaming
+    src = inspect.getsource(build_session)
+    assert "use_tts_aligned_transcript=settings.effective_use_websocket" in src, (
+        "build_session must key aligned transcripts off the effective "
+        "transport, not the raw flag"
+    )
+
+
 def test_build_tts_transport_matches_the_setting() -> None:
     s = load_settings()
-    assert build_tts(s).capabilities.streaming is s.rime_use_websocket
+    assert build_tts(s).capabilities.streaming is s.effective_use_websocket
 
     http = Settings(rime_use_websocket=False, rime_api_key="placeholder-rime-key")
     assert build_tts(http).capabilities.streaming is False
 
 
-def test_the_disclosed_endpoint_is_the_one_that_will_be_called() -> None:
+@pytest.mark.parametrize("flag,base_url", TRANSPORT_MATRIX)
+def test_the_disclosed_endpoint_is_the_one_that_will_be_called(
+    flag: bool, base_url: str | None
+) -> None:
     """The disclosure bug, pinned.
 
     ``Settings.endpoint`` is printed in the startup banner, served by
@@ -106,13 +185,21 @@ def test_the_disclosed_endpoint_is_the_one_that_will_be_called() -> None:
     speech-provider badge, and stated in the README as one of the six fields
     the brief names explicitly. It previously reported the HTTP host on every
     run while streaming over the WebSocket one.
+
+    Every row is checked, including the overrides -- the earlier version of
+    this test asserted the shipped default first and so never reached them.
     """
-    s = load_settings()
-    assert s.rime_use_websocket, "this test assumes the shipped default"
-    actual = build_tts(s)._ws_url().split("?")[0]
-    assert s.endpoint == actual, (
-        f"disclosing {s.endpoint} but calling {actual}"
+    s = Settings(
+        rime_use_websocket=flag,
+        rime_base_url=base_url,
+        rime_api_key="placeholder-rime-key",
     )
+    tts = build_tts(s)
+    if tts.capabilities.streaming:
+        actual = tts._ws_url().split("?")[0]
+    else:
+        actual = tts._base_url
+    assert s.endpoint == actual, f"disclosing {s.endpoint} but calling {actual}"
 
 
 def test_websocket_and_http_are_different_hosts() -> None:
@@ -138,10 +225,51 @@ def test_endpoint_constants_match_the_plugin() -> None:
 
 
 def test_an_explicit_base_url_override_is_disclosed(monkeypatch) -> None:
+    """The disclosed URL is the one the socket is opened against.
+
+    Note the ``/ws3``: that suffix is the plugin's, not ours -- on the
+    WebSocket path it builds ``f"{base_url}/ws3?{params}"``. Disclosing the
+    bare host the operator typed would be disclosing a URL nothing calls,
+    which is the same class of error as naming the wrong host.
+    """
     monkeypatch.setenv("RIME_BASE_URL", "wss://custom.example.test")
     s = load_settings()
-    assert s.endpoint == "wss://custom.example.test"
+    assert s.endpoint == "wss://custom.example.test/ws3"
     assert s.to_dict()["rime"]["base_url_source"] == "RIME_BASE_URL override"
+
+    tts = build_tts(Settings(**{**s.__dict__, "rime_api_key": "placeholder-rime-key"}))
+    assert s.endpoint == tts._ws_url().split("?")[0]
+
+
+def test_an_http_override_is_disclosed_without_a_ws3_suffix(monkeypatch) -> None:
+    monkeypatch.setenv("RIME_USE_WEBSOCKET", "false")
+    monkeypatch.setenv("RIME_BASE_URL", "https://custom.example.test/v1/rime-tts")
+    s = load_settings()
+    assert s.effective_use_websocket is False
+    assert s.endpoint == "https://custom.example.test/v1/rime-tts"
+
+
+def test_a_ws_override_does_not_warn_about_a_degradation_that_is_not_happening(
+    monkeypatch,
+) -> None:
+    """The banner is screen-recorded. It said heard-not-said had fallen back
+    to the estimator while word timestamps were arriving normally."""
+    monkeypatch.setenv("RIME_USE_WEBSOCKET", "false")
+    monkeypatch.setenv("RIME_BASE_URL", "wss://users-ws.rime.ai")
+    s = load_settings()
+    joined = " ".join(s.warnings)
+    assert "falls back to the approximate duration estimator" not in joined
+    assert "overridden by RIME_BASE_URL" in joined
+    assert s.heard_method.startswith("word_timestamps")
+
+
+def test_a_websocket_flag_against_an_http_url_is_called_out(monkeypatch) -> None:
+    """`use_websocket=True` beats the scheme, so the plugin opens a WebSocket
+    against an HTTP path. That cannot work; say so before the first word."""
+    monkeypatch.setenv("RIME_USE_WEBSOCKET", "true")
+    monkeypatch.setenv("RIME_BASE_URL", "https://users.rime.ai/v1/rime-tts")
+    joined = " ".join(load_settings().warnings)
+    assert "WebSocket handshake against" in joined
 
 
 def test_bracket_controls_are_only_set_on_models_that_honour_them() -> None:
@@ -251,3 +379,49 @@ def test_publish_survives_having_no_room() -> None:
     s = load_settings()
     d = deps(s)
     d.publish({"type": "fence", "anything": True})  # must not raise
+
+
+# --------------------------------------------------------------------------
+# Where a live run leaves its evidence
+#
+# This was the only CWD-relative path in the repository. Every other site --
+# scripts/, evidence/, web/ -- resolves a ROOT from __file__. The agent is
+# started as `python -m waypoint.agent dev` from wherever the operator is
+# standing, and the write failure was swallowed by `except OSError`, so the
+# one path that captures proof a real session happened is the one that could
+# silently put it outside the repository.
+# --------------------------------------------------------------------------
+
+
+def test_session_evidence_lands_in_the_repository_whatever_the_cwd(
+    tmp_path, monkeypatch
+) -> None:
+    from waypoint.agent import session_evidence_dir
+
+    monkeypatch.delenv("WAYPOINT_EVIDENCE_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    out = session_evidence_dir()
+
+    assert out.is_absolute()
+    assert tmp_path not in out.parents, "followed the working directory"
+    assert out.parts[-3:] == ("evidence", "results", "sessions")
+
+    root = Path(waypoint.agent.__file__).resolve().parents[2]
+    assert out == root / "evidence" / "results" / "sessions"
+
+
+def test_the_evidence_directory_can_be_overridden(tmp_path, monkeypatch) -> None:
+    """For a non-editable install, where parents[2] lands in site-packages."""
+    from waypoint.agent import session_evidence_dir
+
+    monkeypatch.setenv("WAYPOINT_EVIDENCE_DIR", str(tmp_path / "elsewhere"))
+    assert session_evidence_dir() == (tmp_path / "elsewhere").resolve()
+
+
+def test_the_operator_is_told_where_the_evidence_goes_before_recording() -> None:
+    """Logged at session start, not only at shutdown. Knowing the path after
+    the take is over is knowing it too late."""
+    src = inspect.getsource(waypoint.agent.entrypoint)
+    announce = src.index("session evidence will be written to")
+    register = src.index("add_shutdown_callback")
+    assert announce < register

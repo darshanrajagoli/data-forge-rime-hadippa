@@ -90,7 +90,10 @@ class Scenario:
 
     @property
     def passed(self) -> bool:
-        return all(c.passed for c in self.checks)
+        # `all([])` is True. A scenario that recorded no checks proved
+        # nothing, and "proved nothing" must never render as PASS -- that is
+        # the difference between a harness and a decoration. See `audit_run`.
+        return bool(self.checks) and all(c.passed for c in self.checks)
 
     def check(self, label: str, condition: bool, detail: str = "") -> None:
         self.checks.append(Check(label, bool(condition), detail))
@@ -537,6 +540,95 @@ SCENARIOS: list[Callable[[], Awaitable[Scenario]]] = [
 
 
 # --------------------------------------------------------------------------
+# The harness auditing itself
+#
+# Everything this file asserts funnels through `Scenario.check`, and until an
+# adversarial review pointed it out, nothing anywhere tested that method. One
+# token -- `bool(condition)` to `True` -- turned all 36 checks into decoration
+# while `pytest` stayed green, `run_acceptance.py` printed `6/6 scenarios
+# passed`, exited 0, and overwrote its own artifacts with that result. It did
+# that on a build whose fence had been deliberately configured to speak stale
+# tool results, which is the single defect this product exists to prevent.
+#
+# That is worse than a bug in a test. This repository's central argument is
+# "'the tests pass' is not evidence -- here is a mutation harness proving the
+# tests would fail if the code broke." The argument was applied one level too
+# shallow: the mutation harnesses prove the *tests* bite, and nothing proved
+# the *acceptance harness* did. The acceptance harness is what a judge runs.
+#
+# There were three ways to reach a vacuous PASS, not one:
+#
+#   1. `check()` recording a constant           -- the reviewer's mutation
+#   2. a scenario recording no checks at all    -- `all([])` is True
+#   3. a scenario dropped from SCENARIOS        -- `0/0 passed`, exit 0
+#
+# So the harness now states the shape a complete run must have and fails if it
+# does not see it. The counts are deliberately exact rather than minimums:
+# silent erosion is the failure mode, and a change in the number of claims
+# this file makes should be a decision someone wrote down, not a diff nobody
+# noticed. If you add or remove a check, update this table in the same commit.
+# --------------------------------------------------------------------------
+
+#: scenario id -> the number of checks that scenario must record.
+EXPECTED_SHAPE: dict[str, int] = {
+    "A1": 7,
+    "A2": 6,
+    "A3": 5,
+    "A4": 7,
+    "A5": 5,
+    "A6": 6,
+}
+
+EXPECTED_CHECKS = sum(EXPECTED_SHAPE.values())
+
+
+def audit_run(results: list[Scenario]) -> list[str]:
+    """Structural problems with the run itself, independent of any result.
+
+    Returns human-readable problems; empty means the run had the shape it
+    claims. A non-empty list is a harness failure, which is strictly more
+    serious than a scenario failure: a failing scenario reports a real defect,
+    while a malformed run reports nothing at all while looking like a pass.
+    """
+    problems: list[str] = []
+
+    ids = [r.id for r in results]
+    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    if duplicates:
+        problems.append(f"duplicate scenario ids: {', '.join(duplicates)}")
+
+    missing = [i for i in EXPECTED_SHAPE if i not in ids]
+    if missing:
+        problems.append(
+            f"{len(missing)} scenario(s) did not run: {', '.join(missing)}"
+        )
+
+    unexpected = [i for i in ids if i not in EXPECTED_SHAPE]
+    if unexpected:
+        problems.append(
+            f"scenario(s) not in EXPECTED_SHAPE: {', '.join(unexpected)}. "
+            "Add them there in the same commit."
+        )
+
+    for r in results:
+        expected = EXPECTED_SHAPE.get(r.id)
+        if expected is None:
+            continue
+        if not r.checks:
+            problems.append(f"{r.id} recorded no checks at all")
+        elif len(r.checks) != expected:
+            problems.append(
+                f"{r.id} recorded {len(r.checks)} checks, expected {expected}"
+            )
+
+    total = sum(len(r.checks) for r in results)
+    if not problems and total != EXPECTED_CHECKS:
+        problems.append(f"{total} checks in total, expected {EXPECTED_CHECKS}")
+
+    return problems
+
+
+# --------------------------------------------------------------------------
 # Reporting
 # --------------------------------------------------------------------------
 
@@ -551,6 +643,28 @@ def to_markdown(results: list[Scenario], meta: dict[str, Any]) -> str:
         f"- Command: `python evidence/run_acceptance.py`",
         f"- Requires network: **no**. Requires credentials: **no**.",
         "",
+    ]
+
+    # The artifact says whether the run that produced it was well-formed. A
+    # green table from a harness that skipped scenarios is worse than a red
+    # one, because it reads as evidence. See `audit_run`.
+    if meta.get("harness_intact", True):
+        lines += [
+            f"- Harness self-audit: **intact** "
+            f"({len(meta.get('expected_shape', {}))} scenarios, "
+            f"{sum(meta.get('expected_shape', {}).values())} checks, as declared).",
+            "",
+        ]
+    else:
+        lines += [
+            "> **HARNESS FAILURE.** This run did not have the shape it claims,",
+            "> so the results below are not evidence. Problems:",
+            "",
+        ]
+        lines += [f"> - {p}" for p in meta.get("harness_problems", [])]
+        lines.append("")
+
+    lines += [
         "| Scenario | Claim | Checks | Result |",
         "|---|---|---|---|",
     ]
@@ -606,12 +720,17 @@ async def main_async(argv: list[str]) -> int:
     for fn in SCENARIOS:
         results.append(await fn())
 
+    problems = audit_run(results)
+
     meta = {
         "run_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "commit": git_commit(),
         "python": sys.version.split()[0],
         "requires_network": False,
         "requires_credentials": False,
+        "expected_shape": EXPECTED_SHAPE,
+        "harness_intact": not problems,
+        "harness_problems": problems,
     }
     payload = {"meta": meta, "scenarios": [r.to_dict() for r in results]}
     (out_dir / "acceptance.json").write_text(
@@ -640,10 +759,22 @@ async def main_async(argv: list[str]) -> int:
         f"  {len(results) - len(failed)}/{len(results)} scenarios passed "
         f"({total_checks} checks)"
     )
+
+    if problems:
+        # Louder than a scenario failure, and deliberately so. A failing
+        # scenario is this harness working. A malformed run is this harness
+        # not working, and a number printed above it means nothing.
+        print()
+        print("  !! HARNESS FAILURE -- the run above did not have the shape it")
+        print("  !! claims, so the result line is not evidence of anything.")
+        for p in problems:
+            print(f"  !!   {p}")
+        print("  !! Expected shape is EXPECTED_SHAPE in this file.")
+
     print(f"  artifacts: {out_dir / 'acceptance.json'}")
     print(f"             {out_dir / 'acceptance.md'}")
     print("=" * 72)
-    return 1 if failed else 0
+    return 1 if (failed or problems) else 0
 
 
 def main() -> None:

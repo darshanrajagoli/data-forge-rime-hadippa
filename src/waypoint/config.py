@@ -185,28 +185,68 @@ class Settings:
         return self.pause_ms if self.supports_brackets else 0
 
     @property
+    def effective_use_websocket(self) -> bool:
+        """The transport the plugin will *actually* use.
+
+        ``rime_use_websocket`` is a request, not an outcome. The plugin
+        upgrades it from the URL scheme
+        (``livekit.plugins.rime.tts.TTS.__init__``, v1.7.1)::
+
+            if is_given(base_url):
+                use_websocket = use_websocket or base_url.startswith(("ws://", "wss://"))
+
+        so ``RIME_USE_WEBSOCKET=false`` with ``RIME_BASE_URL=wss://...`` --
+        both documented variables -- streams over a WebSocket while every
+        field derived from the raw flag says HTTP.
+
+        That was not only a disclosure bug. ``build_session`` passes
+        ``use_tts_aligned_transcript=`` this value, so Waypoint would have
+        *declined* word timestamps that were already on the wire and dropped
+        the heard-not-said boundary from exact to estimated -- silently, and
+        while the banner explained the degradation as if it were the operator's
+        choice. Every transport-derived field now keys off this one property.
+
+        ``test_config.py`` asserts this agrees with the installed plugin for
+        the whole cross-product of flag and override, so if Rime changes the
+        rule the suite fails instead of the banner going quietly wrong.
+        """
+        if self.rime_base_url:
+            return self.rime_use_websocket or self.rime_base_url.startswith(
+                ("ws://", "wss://")
+            )
+        return self.rime_use_websocket
+
+    @property
     def transport(self) -> str:
-        return "WebSocket (wss)" if self.rime_use_websocket else "HTTP"
+        return "WebSocket (wss)" if self.effective_use_websocket else "HTTP"
 
     @property
     def endpoint(self) -> str:
         """The URL audio will actually be fetched from.
 
-        Derived from the transport, not from whether an override happens to be
-        set. The previous version disclosed "default (users.rime.ai)" whenever
-        ``RIME_BASE_URL`` was unset -- which is the HTTP host, and therefore
-        wrong on the shipped WebSocket path on every single run.
+        Derived from the effective transport, not from whether an override
+        happens to be set. An earlier version disclosed "default
+        (users.rime.ai)" whenever ``RIME_BASE_URL`` was unset -- the HTTP host,
+        and therefore wrong on the shipped WebSocket path on every single run.
+
+        The ``/ws3`` suffix is the plugin's, not ours: on the WebSocket path it
+        builds ``f"{base_url}/ws3?{params}"``. Appending it here means an
+        override discloses the same URL the socket is opened against, rather
+        than the bare host the operator typed.
         """
         if self.rime_base_url:
-            return self.rime_base_url
-        return RIME_WS_ENDPOINT if self.rime_use_websocket else RIME_HTTP_ENDPOINT
+            base = self.rime_base_url.rstrip("/")
+            if self.effective_use_websocket and not base.endswith("/ws3"):
+                return base + "/ws3"
+            return base
+        return RIME_WS_ENDPOINT if self.effective_use_websocket else RIME_HTTP_ENDPOINT
 
     @property
     def heard_method(self) -> str:
         """Which heard-not-said method this configuration can actually achieve."""
         return (
             "word_timestamps (exact)"
-            if self.rime_use_websocket
+            if self.effective_use_websocket
             else "duration_estimate (approximate)"
         )
 
@@ -239,7 +279,7 @@ class Settings:
                 "sample_rate": self.rime_sample_rate,
                 "speed_alpha": self.rime_speed_alpha,
                 "transport": self.transport,
-                "segment": self.rime_segment if self.rime_use_websocket else None,
+                "segment": self.rime_segment if self.effective_use_websocket else None,
                 "base_url": self.endpoint,
                 "base_url_source": (
                     "RIME_BASE_URL override" if self.rime_base_url
@@ -298,7 +338,7 @@ class Settings:
             f"  model / speaker : {d['rime']['model']} / {d['rime']['speaker']}",
             f"  language        : {d['rime']['lang']}",
             f"  transport       : {d['rime']['transport']}"
-            + (f"  segment={d['rime']['segment']}" if self.rime_use_websocket else ""),
+            + (f"  segment={d['rime']['segment']}" if self.effective_use_websocket else ""),
             f"  audio           : PCM @ {d['rime']['sample_rate']} Hz"
             f"   speed_alpha={d['rime']['speed_alpha']}",
             f"  endpoint        : {d['rime']['base_url']}",
@@ -369,11 +409,37 @@ def load_settings(*, strict_pronunciation: bool = True) -> Settings:
         raise ConfigError(str(exc)) from None
 
     use_ws = _env_bool("RIME_USE_WEBSOCKET", True)
-    if not use_ws:
+    base_url = _env("RIME_BASE_URL")
+
+    # Warn about the transport that will actually be used, not the one that
+    # was asked for. The plugin upgrades a `false` flag to WebSocket when the
+    # override carries a `ws`/`wss` scheme, and an earlier revision warned
+    # here about a degradation that was not happening -- on the banner, in the
+    # terminal, on camera. See `Settings.effective_use_websocket`.
+    effective_ws = use_ws or bool(base_url and base_url.startswith(("ws://", "wss://")))
+
+    if not effective_ws:
         warnings.append(
             "RIME_USE_WEBSOCKET=false: heard-not-said falls back to the "
             "approximate duration estimator, and word timestamps are "
             "unavailable. This is disclosed in the transcript."
+        )
+    elif not use_ws:
+        warnings.append(
+            f"RIME_USE_WEBSOCKET=false is overridden by RIME_BASE_URL={base_url!r}: "
+            "the plugin infers the transport from the URL scheme, so this run "
+            "streams over a WebSocket. Word timestamps remain available."
+        )
+
+    if use_ws and base_url and base_url.startswith(("http://", "https://")):
+        # `use_websocket=True` wins over the scheme, so the plugin opens a
+        # WebSocket against an HTTP path. This configuration cannot work, and
+        # failing loudly beats failing at the first spoken word.
+        warnings.append(
+            f"RIME_BASE_URL={base_url!r} is an HTTP URL but RIME_USE_WEBSOCKET "
+            "is true, so the plugin will attempt a WebSocket handshake against "
+            f"{base_url.rstrip('/')}/ws3. Set RIME_USE_WEBSOCKET=false, or "
+            "point RIME_BASE_URL at a wss:// host."
         )
 
     pause_ms = _env_int("WAYPOINT_PAUSE_MS", 0)
@@ -391,7 +457,7 @@ def load_settings(*, strict_pronunciation: bool = True) -> Settings:
         rime_speed_alpha=_env_float("RIME_SPEED_ALPHA", 1.0),
         rime_use_websocket=use_ws,
         rime_segment=_env("RIME_SEGMENT", "bySentence") or "bySentence",
-        rime_base_url=_env("RIME_BASE_URL"),
+        rime_base_url=base_url,
         pronunciation=strategy,
         pause_ms=pause_ms,
         stt_model=_env("WAYPOINT_STT", "deepgram/nova-3") or "deepgram/nova-3",
