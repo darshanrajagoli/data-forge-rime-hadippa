@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waypoint - driver console</title>
+<!--
+  Waypoint demo console.
+
+  Why this page exists
+  --------------------
+  The claim in RIME_EVIDENCE.md is about behaviour you cannot hear. When the
+  fence withholds a stale tool result, what a listener perceives is the agent
+  simply not saying something -- indistinguishable from the agent having
+  nothing to say. The fence board on the right makes the withholding visible:
+  every tool call appears the moment it is issued, and you watch it resolve
+  into one of five dispositions.
+
+  It also measures. The browser runs an RMS meter over both its own microphone
+  and the remote audio track, so it can time the gap between the driver
+  starting to speak and Rime's audio actually going silent *in this browser's
+  output*. That is the number the driver experiences. The agent's own
+  server-side number is one network hop earlier and therefore flattering; both
+  are shown, labelled, and never averaged together.
+
+  No credential reaches this file. web/server.py mints a short-lived JWT and
+  keeps the API secret in the server process.
+-->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.22.2/dist/livekit-client.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2230; --line: #2d3444;
+    --ink: #e6edf3; --dim: #8b949e; --dimmer: #6e7681;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --info: #58a6ff;
+    --reanchor: #a371f7; --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  header h1 span { color: var(--dim); font-weight: 400; }
+  .grow { flex: 1; }
+  button {
+    font: 600 13px/1 inherit; padding: 9px 16px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--panel2); color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--info); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--info); border-color: var(--info); color: #05080d; }
+  button.danger { background: var(--bad); border-color: var(--bad); color: #1a0505; }
+
+  main { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.15fr); gap: 16px; padding: 16px; }
+  @media (max-width: 940px) { main { grid-template-columns: minmax(0,1fr); } }
+
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  section > h2 {
+    margin: 0; padding: 10px 14px; font-size: 11px; font-weight: 700;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+    border-bottom: 1px solid var(--line); background: var(--panel2);
+  }
+  .body { padding: 14px; }
+  .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  /* state pills */
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    font: 600 11px/1 var(--mono); padding: 6px 10px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--dim); white-space: nowrap;
+  }
+  .pill.on { color: var(--ok); border-color: var(--ok); }
+  .pill.speaking { color: var(--info); border-color: var(--info); }
+  .pill.thinking { color: var(--warn); border-color: var(--warn); }
+
+  /* meters */
+  .meter { height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .meter > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .05s linear; }
+  .meter.remote > i { background: var(--info); }
+  .meterlabel { display: flex; justify-content: space-between; font: 11px/1 var(--mono); color: var(--dim); }
+
+  /* transcript */
+  #transcript { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .turn { padding: 8px 11px; border-radius: 8px; border: 1px solid var(--line); font-size: 13px; }
+  .turn.user { background: #12203a; border-color: #1f3a63; }
+  .turn.agent { background: var(--panel2); }
+  .turn .who { font: 700 10px/1 var(--mono); letter-spacing: .06em; color: var(--dim); display: block; margin-bottom: 4px; }
+
+  /* fence board */
+  #generation {
+    font: 700 34px/1 var(--mono); color: var(--info);
+  }
+  .genrow { display: flex; align-items: baseline; gap: 12px; }
+  .genrow small { color: var(--dim); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font: 12px/1.4 var(--mono); }
+  th { text-align: left; color: var(--dimmer); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+  td { padding: 5px 6px; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  .tag { display: inline-block; font: 700 10px/1 var(--mono); padding: 3px 6px; border-radius: 4px; white-space: nowrap; }
+  .tag.inflight   { background: #1f2d45; color: var(--info); }
+  .tag.delivered  { background: #12321c; color: var(--ok); }
+  .tag.reanchored { background: #2a1f3d; color: var(--reanchor); }
+  .tag.fenced_stale     { background: #3a2a10; color: var(--warn); }
+  .tag.fenced_terminal  { background: #3d1518; color: var(--bad); }
+  .tag.fenced_cancelled { background: #262c36; color: var(--dim); }
+  .tag.never { background: #3d1518; color: var(--bad); }
+  .tag.reanchor_if_args_match { background: #2a1f3d; color: var(--reanchor); }
+  .tag.discard { background: #262c36; color: var(--dim); }
+  .stale td { opacity: .95; }
+
+  /* counters */
+  .counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px,1fr)); gap: 8px; }
+  .counter { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+  .counter b { display: block; font: 700 20px/1.1 var(--mono); }
+  .counter span { font-size: 10px; color: var(--dim); letter-spacing: .04em; text-transform: uppercase; }
+  .counter.delivered b { color: var(--ok); }
+  .counter.reanchored b { color: var(--reanchor); }
+  .counter.fenced b { color: var(--warn); }
+  .counter.blocked b { color: var(--bad); }
+
+  /* measurements */
+  .measure { display: flex; flex-direction: column; gap: 10px; }
+  .mrow { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid #21262d; }
+  .mrow:last-child { border-bottom: 0; padding-bottom: 0; }
+  .mrow .k { font-size: 12px; color: var(--dim); }
+  .mrow .k em { display: block; font-style: normal; font-size: 10.5px; color: var(--dimmer); margin-top: 2px; }
+  .mrow .v { font: 700 17px/1 var(--mono); white-space: nowrap; }
+  .v.good { color: var(--ok); } .v.mid { color: var(--warn); } .v.none { color: var(--dimmer); }
+
+  /* heard, not said */
+  #heard { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .hd { padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); font-size: 13px; }
+  .hd-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; margin-bottom: 5px; }
+  .hd-meta .tag { font: 700 10px/1 var(--mono); padding: 3px 6px; border-radius: 4px; }
+  .hd-meta .exact { background: #12321c; color: var(--ok); }
+  .hd-meta .approx { background: #3a2a10; color: var(--warn); }
+  .hd-meta .frac { font: 400 11px/1 var(--mono); color: var(--dim); }
+  .hd-heard { color: var(--ink); }
+  .hd-unheard { color: var(--bad); text-decoration: line-through; opacity: .75; }
+  .hd-note { display: block; margin-top: 6px; font: 400 11px/1.45 var(--mono); color: var(--dimmer); }
+
+  /* config disclosure */
+  dl.cfg { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font: 12px/1.5 var(--mono); }
+  dl.cfg dt { color: var(--dim); }
+  dl.cfg dd { margin: 0; overflow-wrap: anywhere; }
+  .provider { background: #12321c; border: 1px solid var(--ok); color: var(--ok);
+    border-radius: 8px; padding: 9px 12px; font: 700 13px/1.3 var(--mono); margin-bottom: 12px; }
+  .warnbox { background: #3a2a10; border: 1px solid var(--warn); color: #f0d58c;
+    border-radius: 8px; padding: 9px 12px; font-size: 12px; margin-top: 10px; }
+  .errbox { background: #3d1518; border: 1px solid var(--bad); color: #ffb4ae;
+    border-radius: 8px; padding: 9px 12px; font-size: 12.5px; margin-top: 10px; }
+  .note { color: var(--dimmer); font-size: 11.5px; margin-top: 10px; line-height: 1.45; }
+  .empty { color: var(--dimmer); font-size: 12px; padding: 10px 2px; }
+  code { font: 12px var(--mono); background: var(--panel2); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Waypoint <span>/ driver console</span></h1>
+  <div class="pills">
+    <span class="pill" id="pill-conn">disconnected</span>
+    <span class="pill" id="pill-agent">agent: -</span>
+    <span class="pill" id="pill-user">driver: -</span>
+  </div>
+  <div class="grow"></div>
+  <button class="primary" id="btn-connect">Connect</button>
+  <button id="btn-mute" disabled>Mute</button>
+  <button class="danger" id="btn-disconnect" disabled>Leave</button>
+</header>
+
+<main>
+  <div class="stack">
+    <section>
+      <h2>Speech provider (disclosed)</h2>
+      <div class="body" id="cfg-body">
+        <div class="empty">loading configuration&hellip;</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Audio</h2>
+      <div class="body">
+        <div class="meterlabel"><span>your microphone</span><span id="lvl-local">-</span></div>
+        <div class="meter"><i id="bar-local"></i></div>
+        <div class="meterlabel" style="margin-top:12px"><span>Rime output in this browser</span><span id="lvl-remote">-</span></div>
+        <div class="meter remote"><i id="bar-remote"></i></div>
+        <p class="note">
+          Both meters are RMS over the live tracks. The remote meter is what
+          drives the client-side barge-in measurement: the stopwatch stops when
+          <em>this browser's</em> audio output goes quiet, not when the server
+          stops sending.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Conversation</h2>
+      <div class="body">
+        <div id="transcript"><div class="empty">nothing yet</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Heard, not said</h2>
+      <div class="body">
+        <div id="heard"><div class="empty">no interrupted replies yet</div></div>
+        <p class="note">
+          When Rime's audio is cut mid-sentence, the words in
+          <span class="hd-unheard">strikethrough</span> were generated but never
+          played. Only the plain text goes into the conversation record, so the
+          agent cannot later assume the driver received a gate code it was cut
+          off part-way through. The boundary comes from Rime's word-level
+          timestamps when the WebSocket path is active, and says so when it
+          does not.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section>
+      <h2>Turn fence</h2>
+      <div class="body">
+        <div class="genrow">
+          <div id="generation">0</div>
+          <small>generation<br>advances once per barge-in</small>
+        </div>
+        <div class="counters" style="margin-top:14px">
+          <div class="counter delivered"><b id="c-delivered">0</b><span>delivered</span></div>
+          <div class="counter reanchored"><b id="c-reanchored">0</b><span>re-anchored</span></div>
+          <div class="counter fenced"><b id="c-stale">0</b><span>fenced stale</span></div>
+          <div class="counter blocked"><b id="c-terminal">0</b><span>writes blocked</span></div>
+          <div class="counter"><b id="c-inflight">0</b><span>in flight</span></div>
+        </div>
+        <div class="note" id="fence-note">
+          Every tool call appears here the moment it is issued and resolves into
+          exactly one disposition. <b>Writes blocked</b> is the important one:
+          an irreversible operation the driver's interruption prevented from
+          happening at all.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tool calls</h2>
+      <div class="body">
+        <table>
+          <thead><tr><th>tool</th><th>gen</th><th>policy</th><th>outcome</th><th>ms</th></tr></thead>
+          <tbody id="tickets"><tr><td colspan="5" class="empty">no tool calls yet</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Measured, at the ear</h2>
+      <div class="body measure">
+        <div class="mrow">
+          <div class="k">Barge-in to silence
+            <em>driver's voice detected &rarr; Rime audio silent in this browser</em>
+          </div>
+          <div class="v none" id="m-stop">-</div>
+        </div>
+        <div class="mrow">
+          <div class="k">Best / worst this session
+            <em>client_playout boundary, warm runs only</em>
+          </div>
+          <div class="v none" id="m-stoprange">-</div>
+        </div>
+        <div class="mrow">
+          <div class="k">Response time
+            <em>your voice stops &rarr; first audible Rime sample</em>
+          </div>
+          <div class="v none" id="m-ttfa">-</div>
+        </div>
+        <div class="mrow">
+          <div class="k">Barge-ins observed<em>this session</em></div>
+          <div class="v none" id="m-count">0</div>
+        </div>
+        <p class="note">
+          The first response of a session is a cold run: it carries TLS setup
+          and the WebSocket upgrade. It is labelled <code>cold</code> and kept
+          out of the range above rather than averaged in.
+        </p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+"use strict";
+const LK = window.LivekitClient;
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------- config --
+
+async function loadConfig() {
+  const el = $("cfg-body");
+  try {
+    const cfg = await (await fetch("/api/config")).json();
+    if (cfg.error) throw new Error(cfg.error);
+    renderConfig(cfg);
+  } catch (err) {
+    el.innerHTML = `<div class="errbox"><b>Configuration error.</b><br>${escapeHtml(String(err.message || err))}</div>`;
+  }
+}
+
+function renderConfig(cfg) {
+  const r = cfg.rime || {}, p = cfg.pipeline || {}, t = cfg.turn_handling || {};
+  const pron = cfg.pronunciation || {}, heard = cfg.heard_not_said || {};
+  const rows = [
+    ["model / voice", `${r.model} / ${r.speaker}`],
+    ["language", r.lang],
+    ["transport", r.transport + (r.segment ? `  segment=${r.segment}` : "")],
+    ["audio", `PCM @ ${r.sample_rate} Hz   speed_alpha=${r.speed_alpha}`],
+    ["endpoint", r.base_url],
+    ["api key", r.api_key],
+    ["pronunciation", `${pron.strategy}  (bracket controls: ${r.supports_bracket_controls ? "supported" : "ignored by this model"})`],
+    ["pause brackets", `${pron.pause_ms_requested}ms requested -> ${pron.pause_ms_effective}ms effective`],
+    ["heard-not-said", heard.method],
+    ["stt / llm", `${p.stt} / ${p.llm}`],
+    ["interruption", `${t.interruption_mode}, min ${t.min_interruption_duration}s`],
+  ];
+  $("cfg-body").innerHTML =
+    `<div class="provider">SPEECH PROVIDER: RIME &mdash; primary, no fallback configured</div>` +
+    `<dl class="cfg">` +
+    rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v ?? "-"))}</dd>`).join("") +
+    `</dl>` +
+    (cfg.warnings || []).map(w => `<div class="warnbox"><b>Disclosed:</b> ${escapeHtml(w)}</div>`).join("");
+}
+
+// ------------------------------------------------------------- transcript --
+
+function addTurn(who, text) {
+  const box = $("transcript");
+  if (box.querySelector(".empty")) box.innerHTML = "";
+  const d = document.createElement("div");
+  d.className = "turn " + who;
+  d.innerHTML = `<span class="who">${who === "user" ? "DRIVER" : "WAYPOINT"}</span>${escapeHtml(text)}`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ---------------------------------------------------------- heard, not said --
+//
+// Only interrupted utterances are shown. A reply that played to the end has
+// nothing to reconcile, and listing it would bury the ones that matter.
+
+function addHeard(r) {
+  if (!r || !r.unheard_text) return;
+  const box = $("heard");
+  if (box.querySelector(".empty")) box.innerHTML = "";
+  const exact = r.exact === true;
+  const pct = Math.round((r.heard_fraction || 0) * 100);
+  const d = document.createElement("div");
+  d.className = "hd";
+  d.innerHTML =
+    `<div class="hd-meta">` +
+      `<span class="tag ${exact ? "exact" : "approx"}">` +
+        `${exact ? "EXACT" : "ESTIMATED"} &middot; ${escapeHtml(r.method || "")}` +
+      `</span>` +
+      `<span class="frac">${r.words_heard}/${r.words_total} words &middot; ${pct}% heard` +
+      (r.cut_at_ms == null ? "" : ` &middot; cut at ${Math.round(r.cut_at_ms)}ms`) +
+      `</span>` +
+    `</div>` +
+    `<span class="hd-heard">${escapeHtml(r.heard_text)}</span> ` +
+    `<span class="hd-unheard">${escapeHtml(r.unheard_text)}</span>` +
+    `<span class="hd-note">${escapeHtml(r.note || "")}</span>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ----------------------------------------------------------- fence board --
+
+const tickets = new Map();   // ticket_id -> row state
+const counts = { delivered: 0, reanchored: 0, fenced_stale: 0, fenced_terminal: 0, fenced_cancelled: 0 };
+
+function onIssued(ev) {
+  tickets.set(ev.ticket, {
+    tool: ev.tool, gen: ev.generation, policy: ev.policy,
+    outcome: null, ms: null,
+  });
+  renderTickets();
+}
+
+function onResolved(rec, stats, generation) {
+  const t = tickets.get(rec.ticket_id) || {
+    tool: rec.tool, gen: rec.issued_generation, policy: "-",
+  };
+  t.outcome = rec.disposition;
+  t.ms = rec.latency_ms;
+  t.detail = rec.detail;
+  tickets.set(rec.ticket_id, t);
+  if (rec.disposition in counts) counts[rec.disposition] += 1;
+  if (typeof generation === "number") $("generation").textContent = generation;
+  renderTickets(stats);
+}
+
+function renderTickets(stats) {
+  const rows = [...tickets.entries()].reverse().slice(0, 18);
+  const tb = $("tickets");
+  if (!rows.length) {
+    tb.innerHTML = `<tr><td colspan="5" class="empty">no tool calls yet</td></tr>`;
+  } else {
+    tb.innerHTML = rows.map(([id, t]) => {
+      const outcome = t.outcome
+        ? `<span class="tag ${t.outcome}">${t.outcome.replace(/_/g, " ")}</span>`
+        : `<span class="tag inflight">in flight</span>`;
+      const stale = t.outcome && t.outcome.startsWith("fenced") ? ' class="stale"' : "";
+      return `<tr${stale}>
+        <td>${escapeHtml(t.tool)}</td>
+        <td>${t.gen}</td>
+        <td><span class="tag ${t.policy}">${escapeHtml(String(t.policy).replace(/_/g, " "))}</span></td>
+        <td>${outcome}</td>
+        <td>${t.ms == null ? "-" : Math.round(t.ms)}</td>
+      </tr>`;
+    }).join("");
+  }
+  $("c-delivered").textContent = counts.delivered;
+  $("c-reanchored").textContent = counts.reanchored;
+  $("c-stale").textContent = counts.fenced_stale;
+  $("c-terminal").textContent = counts.fenced_terminal;
+  $("c-inflight").textContent = stats ? stats.in_flight
+    : [...tickets.values()].filter(t => !t.outcome).length;
+}
+
+// -------------------------------------------------- audio level analysis --
+//
+// One RMS meter per track. The remote meter is the measurement instrument:
+// "Rime audio has stopped" means this browser's own output went quiet, which
+// includes the network hop and the jitter buffer the server-side number omits.
+
+const SPEECH_RMS = 0.020;   // local mic: above this counts as the driver talking
+const SILENCE_RMS = 0.004;  // remote: below this for SILENCE_HOLD ms is silence
+const SILENCE_HOLD = 120;
+
+function makeMeter(track, barEl, labelEl, onLevel) {
+  const stream = new MediaStream([track.mediaStreamTrack]);
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream);
+  const an = ctx.createAnalyser();
+  an.fftSize = 512;
+  src.connect(an);
+  const buf = new Float32Array(an.fftSize);
+  let alive = true;
+
+  (function tick() {
+    if (!alive) return;
+    an.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const rms = Math.sqrt(sum / buf.length);
+    barEl.style.width = Math.min(100, rms * 900) + "%";
+    labelEl.textContent = rms < 0.001 ? "silent" : rms.toFixed(3);
+    onLevel(rms, performance.now());
+    requestAnimationFrame(tick);
+  })();
+
+  return { stop() { alive = false; ctx.close().catch(() => {}); } };
+}
+
+// ------------------------------------------------------- the measurement --
+
+const M = {
+  remoteActive: false,
+  //: True while the session reports agent_state === "speaking". Survives the
+  //: inter-sentence gaps that clear remoteActive, so a barge-in landing in a
+  //: gap is still measured. See onLocalLevel.
+  agentSpeaking: false,
+  bargeInGap: false,
+  remoteQuietSince: null,
+  bargeStart: null,       // driver started talking over the agent
+  userSpeechEnd: null,    // driver stopped talking (for response-time)
+  localActive: false,
+  localQuietSince: null,
+  stops: [],              // warm client_playout samples
+  cold: null,
+  count: 0,
+  gapSamples: 0,
+};
+
+function onRemoteLevel(rms, now) {
+  if (rms >= SILENCE_RMS) {
+    M.remoteActive = true;
+    M.remoteQuietSince = null;
+    if (M.userSpeechEnd != null) {
+      recordTTFA(now - M.userSpeechEnd);
+      M.userSpeechEnd = null;
+    }
+    return;
+  }
+  if (!M.remoteActive) return;
+  if (M.remoteQuietSince == null) { M.remoteQuietSince = now; return; }
+  if (now - M.remoteQuietSince < SILENCE_HOLD) return;
+
+  // Confirmed silence. Subtract the hold so we report the moment audio
+  // actually stopped, not the moment we became confident about it.
+  const silentAt = M.remoteQuietSince;
+  M.remoteActive = false;
+  M.remoteQuietSince = null;
+  if (M.bargeStart != null) {
+    recordStop(silentAt - M.bargeStart);
+    M.bargeStart = null;
+  }
+}
+
+function onLocalLevel(rms, now) {
+  if (rms >= SPEECH_RMS) {
+    // Arm the stopwatch if the agent is speaking *or* is between sentences of
+    // a reply it has not finished.
+    //
+    // Gating on `M.remoteActive` alone under-samples. Rime is configured with
+    // segment=bySentence, so a multi-sentence reply has real gaps between
+    // sentences, and a gap longer than SILENCE_HOLD clears remoteActive
+    // mid-utterance. A barge-in landing in one of those gaps was not measured
+    // at all -- and because the panel reports min/max over recorded samples,
+    // the missing ones were invisible and biased the range toward easy cases.
+    //
+    // `agentSpeaking` comes from the session's own agent_state_changed events,
+    // which the agent already publishes, and stays true across sentence gaps.
+    if (!M.localActive && (M.remoteActive || M.agentSpeaking) && M.bargeStart == null) {
+      M.bargeStart = now;          // barge-in onset
+      M.bargeInGap = !M.remoteActive;
+    }
+    M.localActive = true;
+    M.localQuietSince = null;
+    return;
+  }
+  if (!M.localActive) return;
+  if (M.localQuietSince == null) { M.localQuietSince = now; return; }
+  if (now - M.localQuietSince > 400) {
+    M.localActive = false;
+    M.userSpeechEnd = M.localQuietSince;
+    M.localQuietSince = null;
+  }
+}
+
+function recordStop(ms) {
+  M.count += 1;
+  $("m-count").textContent = M.gapSamples
+    ? `${M.count}  (${M.gapSamples} in a sentence gap)`
+    : String(M.count);
+  $("m-count").className = "v good";
+
+  const el = $("m-stop");
+  if (M.cold == null) {
+    M.cold = ms;
+    el.textContent = `${Math.round(ms)} ms (cold)`;
+    el.className = "v mid";
+  } else {
+    M.stops.push(ms);
+    el.textContent = `${Math.round(ms)} ms`;
+    el.className = "v " + (ms < 400 ? "good" : "mid");
+    const lo = Math.round(Math.min(...M.stops));
+    const hi = Math.round(Math.max(...M.stops));
+    const r = $("m-stoprange");
+    r.textContent = M.stops.length === 1 ? `${lo} ms (n=1)`
+      : `${lo}-${hi} ms (n=${M.stops.length})`;
+    r.className = "v " + (hi < 500 ? "good" : "mid");
+  }
+  if (M.bargeInGap) M.gapSamples += 1;
+  publish({ type: "client_measurement", metric: "barge_in_to_silence",
+            value_ms: ms, boundary: "client_playout",
+            in_sentence_gap: M.bargeInGap,
+            warmth: M.stops.length ? "warm" : "cold" });
+  M.bargeInGap = false;
+}
+
+function recordTTFA(ms) {
+  if (ms < 60 || ms > 15000) return;   // not a plausible turn boundary
+  const el = $("m-ttfa");
+  el.textContent = `${Math.round(ms)} ms`;
+  el.className = "v " + (ms < 900 ? "good" : "mid");
+  publish({ type: "client_measurement", metric: "response_time",
+            value_ms: ms, boundary: "client_first_audio" });
+}
+
+// ------------------------------------------------------------- transport --
+
+let room = null;
+const enc = new TextEncoder(), dec = new TextDecoder();
+let meters = [];
+
+function publish(obj) {
+  if (!room || room.state !== "connected") return;
+  try {
+    room.localParticipant.publishData(enc.encode(JSON.stringify(obj)),
+      { reliable: true, topic: "waypoint.client" });
+  } catch (_) { /* observability must never break the demo */ }
+}
+
+function setPill(id, text, cls) {
+  const el = $(id);
+  el.textContent = text;
+  el.className = "pill" + (cls ? " " + cls : "");
+}
+
+async function connect() {
+  $("btn-connect").disabled = true;
+  try {
+    const res = await fetch("/api/token");
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const { url, token } = await res.json();
+
+    room = new LK.Room({ adaptiveStream: true, dynacast: true });
+
+    room.on(LK.RoomEvent.Connected, () => {
+      setPill("pill-conn", "connected", "on");
+      $("btn-mute").disabled = false;
+      $("btn-disconnect").disabled = false;
+    });
+
+    room.on(LK.RoomEvent.Disconnected, () => {
+      setPill("pill-conn", "disconnected");
+      $("btn-connect").disabled = false;
+      $("btn-mute").disabled = true;
+      $("btn-disconnect").disabled = true;
+      meters.forEach(m => m.stop()); meters = [];
+    });
+
+    room.on(LK.RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind !== LK.Track.Kind.Audio) return;
+      const el = track.attach();
+      el.autoplay = true;
+      document.body.appendChild(el);
+      meters.push(makeMeter(track, $("bar-remote"), $("lvl-remote"), onRemoteLevel));
+    });
+
+    room.on(LK.RoomEvent.LocalTrackPublished, (pub) => {
+      if (pub.track && pub.track.kind === LK.Track.Kind.Audio) {
+        meters.push(makeMeter(pub.track, $("bar-local"), $("lvl-local"), onLocalLevel));
+      }
+    });
+
+    // Agent-side events: the fence board and the transcript.
+    room.on(LK.RoomEvent.DataReceived, (payload, _p, _k, topic) => {
+      if (topic !== "waypoint.fence") return;
+      let ev;
+      try { ev = JSON.parse(dec.decode(payload)); } catch { return; }
+      switch (ev.type) {
+        case "config":     renderConfig(ev.config); break;
+        case "issued":     onIssued(ev); break;
+        case "fence":      onResolved(ev.record, ev.stats, ev.generation); break;
+        case "generation": $("generation").textContent = ev.generation; break;
+        case "transcript": addTurn("user", ev.text); break;
+        case "heard":      addHeard(ev.result); break;
+        case "state":
+          if (ev.who === "agent") {
+            M.agentSpeaking = (ev.state === "speaking");
+            setPill("pill-agent", "agent: " + ev.state,
+              ev.state === "speaking" ? "speaking" : ev.state === "thinking" ? "thinking" : "");
+          }
+          else setPill("pill-user", "driver: " + ev.state, ev.state === "speaking" ? "on" : "");
+          break;
+        case "error":
+          $("fence-note").innerHTML = `<span style="color:var(--bad)">agent error: ${escapeHtml(ev.detail)}</span>`;
+          break;
+      }
+    });
+
+    await room.connect(url, token);
+    await room.localParticipant.setMicrophoneEnabled(true);
+  } catch (err) {
+    $("btn-connect").disabled = false;
+    $("cfg-body").insertAdjacentHTML("beforeend",
+      `<div class="errbox"><b>Could not connect.</b><br>${escapeHtml(String(err.message || err))}</div>`);
+  }
+}
+
+$("btn-connect").onclick = connect;
+$("btn-disconnect").onclick = () => room && room.disconnect();
+$("btn-mute").onclick = async () => {
+  if (!room) return;
+  const on = room.localParticipant.isMicrophoneEnabled;
+  await room.localParticipant.setMicrophoneEnabled(!on);
+  $("btn-mute").textContent = on ? "Unmute" : "Mute";
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+loadConfig();
+</script>
+</body>
+</html>

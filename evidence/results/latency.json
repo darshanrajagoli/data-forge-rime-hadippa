@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "run_at": "2026-09-04T05:08:02+0530",
+    "model": "coda",
+    "voice": "lyra",
+    "lang": "eng",
+    "sample_rate": 22050,
+    "warm_n": 1,
+    "errors": [
+      "cold/websocket: APIStatusError: message='Invalid response status', status_code=401, retryable=False",
+      "warm[0]/websocket: APIStatusError: message='Invalid response status', status_code=401, retryable=False"
+    ]
+  },
+  "summary": {
+    "run_id": "latency-20260904T050800",
+    "n_samples": 0,
+    "series": [],
+    "boundaries_explained": {
+      "client_playout": "Browser reported its audio output went silent. Includes network, jitter buffer and device latency. This is the number the driver actually experiences.",
+      "server_flush": "Agent stopped handing frames to the transport. Excludes the last network hop and the client jitter buffer, so it is optimistic relative to the ear by roughly one RTT/2 plus buffer depth.",
+      "server_first_frame": "First synthesised audio frame handed to the transport. Measures the STT+LLM+Rime pipeline, not what reached the speaker.",
+      "client_first_audio": "Browser rendered the first audible sample. End-to-end perceived response time.",
+      "in_process": "Wholly inside the agent process. No transport involved, so no network component to separate out."
+    }
+  },
+  "samples": []
+}

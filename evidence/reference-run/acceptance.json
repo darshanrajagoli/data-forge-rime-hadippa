@@ -1,0 +1,355 @@
+{
+  "meta": {
+    "run_at": "2026-09-04T11:31:58+0530",
+    "commit": "(not a git checkout)",
+    "python": "3.12.0",
+    "requires_network": false,
+    "requires_credentials": false
+  },
+  "scenarios": [
+    {
+      "id": "A1",
+      "title": "A superseded lookup is never spoken",
+      "claim": "When the driver barges in while a route lookup is in flight, the result of that lookup is never turned into speech, and never becomes a value the model can state on a later turn.",
+      "procedure": "Issue eta_to('Gough') with a 400ms backend. Flip the speech handle to interrupted while it is in flight. Await the tool and inspect the returned string and the fence audit log.",
+      "passed": true,
+      "checks": [
+        {
+          "label": "tool returned the superseded marker",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "no ETA value appears in the returned text",
+          "passed": true,
+          "detail": "returned: SUPERSEDED_RESULT: the driver interrupted before hearing this, and it answers a request th..."
+        },
+        {
+          "label": "the marker instructs the model not to state it later",
+          "passed": true,
+          "detail": "LiveKit retains interrupted tool outputs in the chat context, so the returned string is what the model reads next turn. It has to be self-describing."
+        },
+        {
+          "label": "exactly one fence record was written",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "disposition is fenced_stale",
+          "passed": true,
+          "detail": "got fenced_stale"
+        },
+        {
+          "label": "generation advanced exactly once",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "fence accounting balances",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "artifacts": {
+        "returned_text": "SUPERSEDED_RESULT: the driver interrupted before hearing this, and it answers a request they have already changed. It is not current. Do not state it, now or on any later turn. Answer what they actually asked for instead.",
+        "fence_audit": {
+          "generation": 1,
+          "marks": [
+            {
+              "generation": 0,
+              "at": 1628812.281,
+              "reason": "session_start"
+            },
+            {
+              "generation": 1,
+              "at": 1628812.687,
+              "reason": "speech_handle.interrupted"
+            }
+          ],
+          "stats": {
+            "delivered": 0,
+            "reanchored": 0,
+            "fenced_stale": 1,
+            "fenced_cancelled": 0,
+            "fenced_terminal": 0,
+            "issued": 1,
+            "in_flight": 0
+          },
+          "records": [
+            {
+              "ticket_id": "t000001",
+              "tool": "eta_to",
+              "args_fp": "e6267608d339126a",
+              "issued_generation": 0,
+              "observed_generation": 1,
+              "disposition": "fenced_stale",
+              "issued_at": 1628812.281,
+              "resolved_at": 1628812.687,
+              "latency_ms": 406.0,
+              "detail": "origin 'speech-1' retired (turn interrupted)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "A2",
+      "title": "A superseded irreversible write never reaches the backend",
+      "claim": "When the driver barges in before an irreversible operation has been carried out, the operation does not happen at all. This is checked against the backend's mutation log, not against what was said.",
+      "procedure": "Mark the speech handle interrupted, then call mark_delivered, reschedule_stop and notify_recipient. Inspect the backend mutation log and the stop statuses.",
+      "passed": true,
+      "checks": [
+        {
+          "label": "no mutation reached the dispatch backend",
+          "passed": true,
+          "detail": "mutation log: []"
+        },
+        {
+          "label": "all three tools reported a refusal",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "the refusal states that nothing changed",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "stop statuses are untouched",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "all three are recorded as fenced_terminal, not merely stale",
+          "passed": true,
+          "detail": "fenced_terminal is the disposition reserved for NEVER-policy tools, so an irreversible refusal is distinguishable in the audit log."
+        },
+        {
+          "label": "fence accounting balances",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "artifacts": {
+        "mutation_log": [],
+        "fence_stats": {
+          "delivered": 0,
+          "reanchored": 0,
+          "fenced_stale": 0,
+          "fenced_cancelled": 0,
+          "fenced_terminal": 3,
+          "issued": 3,
+          "in_flight": 0
+        }
+      }
+    },
+    {
+      "id": "A3",
+      "title": "A write already in flight is reported, not hidden",
+      "claim": "If the driver interrupts after an irreversible write has already started, the write lands. The agent says so on the next turn instead of pretending it did not happen or doing it twice.",
+      "procedure": "Start mark_delivered against a 300ms backend, wait past the effect-boundary check, then flip the handle to interrupted.",
+      "passed": true,
+      "checks": [
+        {
+          "label": "the write did land",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "the agent reports it as committed but unconfirmed",
+          "passed": true,
+          "detail": "returned: COMMITTED_BUT_UNCONFIRMED: this was carried out, but the driver interrupted before hearing..."
+        },
+        {
+          "label": "the agent is told not to repeat the action",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "this is the documented residual risk, not a silent failure",
+          "passed": true,
+          "detail": "Cancellation cannot protect a write that already committed. The window is bounded by one backend call and is stated in docs/THREAT_MODEL.md."
+        },
+        {
+          "label": "fence accounting balances",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "artifacts": {
+        "returned_text": "COMMITTED_BUT_UNCONFIRMED: this was carried out, but the driver interrupted before hearing the confirmation. Tell them plainly that it is done, on the next turn. Do not repeat it as if it were new, and do not do it again."
+      }
+    },
+    {
+      "id": "A4",
+      "title": "Refining a request re-uses the in-flight lookup",
+      "claim": "When the driver interrupts to add to a request rather than replace it, the in-flight read is handed to the new turn instead of being discarded and re-issued. The safety mechanism pays for itself in latency.",
+      "procedure": "Issue an eta_to ticket, bump the generation, issue an identical ticket for the new turn, then admit the first.",
+      "passed": true,
+      "checks": [
+        {
+          "label": "disposition is reanchored",
+          "passed": true,
+          "detail": "got reanchored"
+        },
+        {
+          "label": "the result is speakable",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "it is attributed to the new turn's ticket",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "the value handed over equals a fresh lookup",
+          "passed": true,
+          "detail": "route_eta is deterministic precisely so this is checkable."
+        },
+        {
+          "label": "satisfying the new turn cost zero extra backend calls",
+          "passed": true,
+          "detail": "backend call count unchanged at 2; the alternative is a second lookup costing about 402ms."
+        },
+        {
+          "label": "the re-anchor decision itself is effectively free",
+          "passed": true,
+          "detail": "0.005ms in-process, against a 402ms round trip."
+        },
+        {
+          "label": "fence accounting balances",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "artifacts": {
+        "round_trip_ms": 402.1,
+        "reanchor_decision_ms": 0.0052,
+        "backend_calls_for_second_turn": 0
+      }
+    },
+    {
+      "id": "A5",
+      "title": "The transcript records what was heard, not what was generated",
+      "claim": "When Rime's audio is cut mid-sentence, the assistant turn written into the chat context contains only the words that were played, marked as truncated. A gate code that was never spoken never appears in history.",
+      "procedure": "Register an utterance, attach synthetic Rime word timestamps at 300ms per word, cut at 1500ms, and inspect the chat text.",
+      "passed": true,
+      "checks": [
+        {
+          "label": "boundary is exact, from Rime word timestamps",
+          "passed": true,
+          "detail": "This is why the shipped config uses the Rime WebSocket path: use_websocket=True plus use_tts_aligned_transcript=True."
+        },
+        {
+          "label": "five words were heard",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "the unheard gate code is absent from the chat context",
+          "passed": true,
+          "detail": "chat text: 'Your next stop is twelve [cut off here - the driver interrupted and did not hear the rest]'"
+        },
+        {
+          "label": "the turn is marked as truncated",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "the generated text is preserved separately for audit",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "artifacts": {
+        "heard_result": {
+          "utterance_id": "u1",
+          "generated_text": "Your next stop is twelve forty-seven Goff Street and the gate code is four four one seven",
+          "heard_text": "Your next stop is twelve",
+          "unheard_text": "forty-seven Goff Street and the gate code is four four one seven",
+          "cut_at_ms": 1500.0,
+          "method": "word_timestamps",
+          "exact": true,
+          "words_heard": 5,
+          "words_total": 17,
+          "heard_fraction": 0.2941,
+          "note": "exact: Rime word timestamps; cut at 1500ms, 5/17 words completed"
+        },
+        "chat_text": "Your next stop is twelve [cut off here - the driver interrupted and did not hear the rest]"
+      }
+    },
+    {
+      "id": "A6",
+      "title": "Bookkeeping holds across a realistic interrupted conversation",
+      "claim": "Over a conversation with several barge-ins, mixed reads and writes and a cancellation, every issued ticket resolves exactly once and nothing leaks.",
+      "procedure": "Nine turns: reads, a barge-in, a refused write, a cancelled read, a committed write, more reads. Assert the accounting identity after each.",
+      "passed": true,
+      "checks": [
+        {
+          "label": "no ticket left in flight",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "one record per issued ticket",
+          "passed": true,
+          "detail": "7 records, 7 issued"
+        },
+        {
+          "label": "exactly one write committed",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "exactly one write was refused",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "exactly one read was cancelled",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "label": "the generation advanced once, for one barge-in",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "artifacts": {
+        "steps": [
+          "next_stop",
+          "eta_to(Gough)",
+          "refused write",
+          "cancelled read",
+          "committed write",
+          "stops_remaining",
+          "eta_to(Guerrero)"
+        ],
+        "fence_stats": {
+          "delivered": 5,
+          "reanchored": 0,
+          "fenced_stale": 0,
+          "fenced_cancelled": 1,
+          "fenced_terminal": 1,
+          "issued": 7,
+          "in_flight": 0
+        },
+        "latency_summary": {
+          "total": 7,
+          "by_disposition": {
+            "delivered": 5,
+            "fenced_terminal": 1,
+            "fenced_cancelled": 1
+          },
+          "tool_latency_ms": {
+            "p50": 63.0,
+            "p95": 78.0,
+            "max": 78.0
+          }
+        }
+      }
+    }
+  ]
+}

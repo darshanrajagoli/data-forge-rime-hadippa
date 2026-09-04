@@ -1,0 +1,43 @@
+# Credentials - never commit these
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Evidence artifacts that are REGENERATED, not authored.
+#
+# WORKFLOW.md step 1c has all four people run the acceptance harness on their
+# own machine. If its output were tracked, four people would each produce a
+# different acceptance.json and collide on a file nobody owns - the exact
+# conflict the file-ownership rule promises cannot happen.
+#
+# So the volatile run is ignored, and the citable one lives in
+# evidence/reference-run/, generated deliberately with --out and committed once.
+evidence/results/acceptance.json
+evidence/results/acceptance.md
+evidence/results/tmp/
+*.wav.tmp
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Exclusive lock held by evidence/mutation_test.py while it edits source.
+evidence/.mutation_test.lock

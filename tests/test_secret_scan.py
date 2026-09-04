@@ -1,0 +1,303 @@
+"""The credential scanner.
+
+A security control with no tests is not a control. "Exposes a live credential"
+is a listed disqualifier in the Rime brief, so this file checks both halves of
+the scanner's job: that it catches real keys, and that it does not cry wolf.
+
+The second half matters as much as the first. A scanner that fires on a test
+fixture gets switched off by whoever is trying to commit at 2am, and a scanner
+that is switched off catches nothing.
+
+Note the shape of the fixtures below. Each fake credential is defined once as
+a constant carrying a ``secret-scan: allow`` pragma, and every test builds its
+sample line by interpolating that constant. That is not cosmetic: it means no
+*line* in this file contains a complete credential-shaped literal, so
+:func:`test_this_repository_is_clean` really does scan this file and really
+does find nothing, instead of the file being excluded to make the test pass.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from secret_scan import check_gitignore, scan, scan_text  # noqa: E402
+
+FAKE = Path("sample.py")
+
+# Fake credentials, each annotated once. Nothing here is real.
+RIME_K = "ak_9f3b21c7d84e5a06b1f2"          # secret-scan: allow
+LIVEKIT_K = "APIabcdef1234567"              # secret-scan: allow
+GH_K = "gh_A1b2C3d4E5f6G7h8I9j0K1l2"        # secret-scan: allow
+PW = "hunter2hunter2hunter2"                # secret-scan: allow
+OPENAI_K = "sk-proj-AAAABBBBCCCCDDDDEEEEFF" # secret-scan: allow
+AWS_K = "AKIAZZZZQQQQWWWWEEE1"              # secret-scan: allow
+URL_CRED = "wss://apikey:s3cr3tvalue99@host.io"  # secret-scan: allow
+PEM = "-----BEGIN RSA PRIVATE KEY-----"     # secret-scan: allow
+PEM_SSH = "-----BEGIN OPENSSH PRIVATE KEY-----"  # secret-scan: allow
+
+
+def hits(text: str, path: Path = FAKE) -> list:
+    return scan_text(path, text, str(path))
+
+
+# --------------------------------------------------------------------------
+# It catches real credentials
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line,rule_fragment",
+    [
+        (f'RIME_API_KEY = "{RIME_K}"', "Rime"),
+        (f'key = "{LIVEKIT_K}"', "LiveKit"),
+        (f'token = "{GH_K}"', "secret-looking"),
+        (f'password = "{PW}"', "secret-looking"),
+        (PEM, "private key"),
+        (PEM_SSH, "private key"),
+        (f'url = "{URL_CRED}"', "URL"),
+        (f'aws = "{AWS_K}"', "AWS"),
+        (f'k = "{OPENAI_K}"', "OpenAI"),
+    ],
+)
+def test_catches(line: str, rule_fragment: str) -> None:
+    found = hits(line + "\n")
+    assert found, f"missed: {line}"
+    assert rule_fragment.lower() in found[0].rule.lower(), (
+        f"matched {found[0].rule!r}, expected something like {rule_fragment!r}"
+    )
+
+
+def test_reports_line_number_and_excerpt() -> None:
+    text = f'ok = 1\n\nRIME_API_KEY = "{RIME_K}"\n'
+    (f,) = hits(text)
+    assert f.line == 3
+    assert RIME_K[:8] in f.excerpt
+
+
+def test_one_finding_per_line() -> None:
+    """Two rules matching the same line is one problem, not two."""
+    assert len(hits(f'secret = "{LIVEKIT_K}abc"\n')) == 1
+
+
+def test_long_lines_are_skipped_not_crashed_on() -> None:
+    assert hits("x = 1  # " + "y" * 3000 + "\n") == []
+
+
+# --------------------------------------------------------------------------
+# It does not cry wolf
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "RIME_API_KEY=your-rime-api-key",
+        'key = "xxxxxxxxxxxxxxxxxxxx"',
+        'key = "placeholder-value-here"',
+        'key = "sk_test_abcdefghijklmnop"',
+        "RIME_API_KEY=<your key here>",
+        'key = "${RIME_API_KEY}"',
+        'key = "{{ rime_api_key }}"',
+        'url = f"wss://key:{SECRET}@demo.livekit.cloud"',
+        'url = "wss://key:secret@host"',
+        'url = "postgres://user:password@db"',
+        'key = "%(rime_key)s"',
+        "# RIME_API_KEY is read from the environment",
+        'SECRET = "sk_live_FAKE_not_a_real_credential_00"',
+        'aws = "AKIAIOSFODNN7EXAMPLE"',
+        'note = "the key is redacted in the banner"',
+    ],
+)
+def test_allows_obvious_non_secrets(line: str) -> None:
+    assert hits(line + "\n") == [], f"false positive on: {line}"
+
+
+def test_env_example_is_treated_as_a_template() -> None:
+    """It exists to hold placeholder-shaped values."""
+    assert hits(f"LIVEKIT_API_KEY={LIVEKIT_K}\n", Path(".env.example")) == []
+
+
+def test_a_private_key_is_flagged_even_in_a_template() -> None:
+    """There is no legitimate reason for one to be in .env.example."""
+    assert hits(PEM + "\n", Path(".env.example"))
+
+
+# --------------------------------------------------------------------------
+# The pragma
+# --------------------------------------------------------------------------
+
+
+def _real_line() -> str:
+    return f'RIME_API_KEY = "{RIME_K}"'
+
+
+def test_the_bare_line_really_would_be_caught() -> None:
+    """Guards the pragma tests below from passing vacuously."""
+    assert hits(_real_line() + "\n")
+
+
+def test_pragma_on_the_same_line_suppresses() -> None:
+    assert hits(f"{_real_line()}  # secret-scan: allow\n") == []
+
+
+def test_pragma_on_the_preceding_line_suppresses() -> None:
+    assert hits(f"# secret-scan: allow\n{_real_line()}\n") == []
+
+
+def test_pragma_does_not_suppress_two_lines_down() -> None:
+    """A blanket pragma at the top of a file must not disarm the whole file."""
+    assert hits(f"# secret-scan: allow\nx = 1\n{_real_line()}\n")
+
+
+@pytest.mark.parametrize(
+    "form", ["secret-scan: allow", "secret_scan: ignore", "secret scan:allow"]
+)
+def test_pragma_spellings(form: str) -> None:
+    assert hits(f"{_real_line()}  # {form}\n") == []
+
+
+# --------------------------------------------------------------------------
+# The repository itself
+# --------------------------------------------------------------------------
+
+
+def test_this_repository_is_clean() -> None:
+    """The check that actually matters. Also runs in the pre-commit hook."""
+    findings = scan(ROOT)
+    assert findings == [], "\n".join(
+        f"{f.path}:{f.line} [{f.rule}] {f.excerpt}" for f in findings
+    )
+
+
+def test_gitignore_covers_the_env_files() -> None:
+    assert check_gitignore(ROOT) == []
+
+
+def test_env_example_exists_and_has_no_real_values() -> None:
+    example = ROOT / ".env.example"
+    assert example.exists()
+    body = example.read_text(encoding="utf-8")
+    assert "your-rime-api-key" in body
+    assert scan_text(example, body, ".env.example") == []
+
+
+def test_env_local_if_present_is_gitignored() -> None:
+    if (ROOT / ".env.local").exists():
+        gi = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        assert ".env.local" in gi, ".env.local exists and is not gitignored"
+
+
+# --------------------------------------------------------------------------
+# Vendor identifiers vs real keys
+#
+# The LiveKit key rule matches "API" followed by ten or more characters.
+# LiveKit's own public exception classes are exactly that shape, so the scanner
+# reported the vendor's error hierarchy as leaked credentials -- and the
+# pre-commit hook blocked any commit containing real tool output. Six places in
+# this repository format errors as f"{type(exc).__name__}: {exc}", and
+# docs/MEASUREMENTS.md explicitly asks the reader to paste failures in.
+#
+# Every fixture below is composed at runtime so that no line in this file holds
+# a complete credential-shaped literal. That is deliberate: this file is itself
+# walked by test_this_repository_is_clean, and that test only means something
+# if the scanner really does read it.
+# --------------------------------------------------------------------------
+
+#: Built from ordinals so no line in this file contains a bare quote or
+#: newline escape that a heredoc or an editor could mangle.
+NL = chr(10)
+Q = chr(34)
+
+VENDOR_NAMES = [
+    "ConnectionError",
+    "StatusError",
+    "TimeoutError",
+    "ConnectOptions",
+    "ConnectError",
+    "Error",
+]
+
+#: Real-key tails, prefixed with "API" at runtime.
+KEY_TAILS = [
+    "Rb7kQm2xLp9w",       # capital-then-lowercase: what a lookahead fix misses
+    "Km3xyzABC123",
+    "abcdef1234567",
+    "zzzz00001111",
+    "ConnectionErrorX9",  # vendor-shaped, but not a vendor name
+]
+
+
+@pytest.mark.parametrize("suffix", VENDOR_NAMES)
+def test_livekit_exception_names_are_not_credentials(suffix: str) -> None:
+    """Pasting real tool output into a document must not block a commit."""
+    name = "API" + suffix
+    line = "    ! " + name + ": message=" + Q + "Invalid response" + Q + ", status=401"
+    assert hits(line + NL) == [], "false positive on " + name
+
+
+@pytest.mark.parametrize("tail", KEY_TAILS)
+def test_a_real_key_shaped_like_a_vendor_name_is_still_flagged(tail: str) -> None:
+    """The property that the obvious fix breaks.
+
+    Excluding CamelCase tails by pattern (API followed by a negative lookahead
+    on [A-Z][a-z]) removes the vendor noise *and* stops detecting real keys
+    whose fourth character is a capital followed by a lowercase. A false
+    negative in a credential scanner is strictly worse than the noise it
+    removes, so the fix subtracts an explicit allowlist from matches rather
+    than narrowing the pattern.
+    """
+    key = "API" + tail
+    assert hits("key = " + Q + key + Q + NL), "stopped detecting " + key
+
+
+def test_the_allowlist_is_exact_not_a_prefix_match() -> None:
+    from secret_scan import VENDOR_IDENTIFIERS
+
+    assert "API" + "ConnectionError" in VENDOR_IDENTIFIERS
+    composed = "API" + "ConnectionError" + "AAAA"
+    assert hits("k = " + Q + composed + Q + NL), "a key prefixed by a vendor name is still a key"
+
+
+# --------------------------------------------------------------------------
+# JSON-shaped credentials
+#
+# Every committed artifact in evidence/results/ is JSON. The rule matched
+# name = "value" but not "name": "value", because the closing quote sits
+# between the name and the colon -- so a key in an artifact was undetectable,
+# in the very directory SKIP_DIRS was excluding from the walk. The two gaps
+# hid each other.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("api_key", RIME_K),
+        ("secret", "s3cr3t" + "value0123456789"),
+        ("token", "tok_" + "abcdefghij0123456"),
+        ("password", PW),
+    ],
+)
+def test_json_shaped_credentials_are_caught(name: str, value: str) -> None:
+    line = "{" + Q + name + Q + ": " + Q + value + Q + "}"
+    assert hits(line + NL, Path("artifact.json")), "missed: " + line
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "your-rime-api-key",
+        "your-livekit-api-secret",
+        "${RIME_API_KEY}",
+        "the api_key is redacted in the banner",
+    ],
+)
+def test_json_placeholders_are_not_flagged(value: str) -> None:
+    line = "{" + Q + "api_key" + Q + ": " + Q + value + Q + "}"
+    assert hits(line + NL, Path("artifact.json")) == [], "false positive: " + line

@@ -1,0 +1,164 @@
+# Continuous verification.
+#
+# The point of this file is not hygiene, it is evidence. RIME_EVIDENCE.md
+# claims that the central behaviour can be verified by anyone, on any machine,
+# with no credentials. This workflow is that claim executed on hardware nobody
+# on the team controls, on every push, across two operating systems and the
+# oldest and newest supported Python.
+#
+# Nothing here has access to a secret. There is no `secrets:` block, and no job
+# needs one -- which is the whole argument. If a judge wants to check the fence
+# they do not need our keys, and neither does GitHub.
+
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two operating systems because the team develops on Windows and
+        # judges are likely on macOS or Linux; the oldest and newest supported
+        # Python because pyproject declares >=3.10,<3.15 and an untested claim
+        # is not a claim.
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Test suite
+        run: pytest -q
+
+      - name: Acceptance scenarios
+        # The six claims in RIME_EVIDENCE.md. Exits non-zero if any check
+        # fails, so a regression in the fence fails the build rather than
+        # reaching a driver.
+        run: python evidence/run_acceptance.py
+
+      - name: Secret scan
+        run: python scripts/secret_scan.py
+
+      - name: Offline preflight
+        # --skip-tests because the two steps above already ran them; this
+        # checks configuration validity and the pronunciation layer.
+        run: python scripts/preflight.py --offline --skip-tests
+
+      - name: Config banner renders without credentials
+        # Guards the "--print-config works on a laptop with no keys" promise in
+        # the README. Exit 1 here means "valid config, credentials absent",
+        # which is exactly what a fresh clone should report.
+        run: python -m waypoint.agent --print-config || test $? -eq 1
+        shell: bash
+
+      - name: Upload evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-${{ matrix.os }}-py${{ matrix.python }}
+          path: evidence/results/acceptance.*
+          if-no-files-found: error
+          retention-days: 30
+
+  mutation:
+    # Deliberately NOT in the matrix. This runs the full suite fifteen times,
+    # so it belongs once rather than once per OS/Python cell -- and what it
+    # checks (whether a test would fail if the code broke) is a property of the
+    # tests, not of the platform.
+    name: tests would catch a real bug
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Mutation test - core
+        # Exits non-zero if any deliberate bug survives the suite, so a hole in
+        # the tests fails the build rather than sitting unnoticed behind a
+        # green checkmark.
+        run: python evidence/mutation_test.py
+
+      - name: Mutation test - wiring, contract and gates
+        # A second table, covering the layer the first one cannot reach: the
+        # Settings-to-session wiring, the Rime values that are only wrong
+        # against the live catalog, the system prompt, and the two scripts that
+        # stand in for the brief's disqualifiers. When this was first written
+        # 9 of its 12 mutants survived, including barge-in disabled entirely.
+        run: python evidence/mutation_test_ii.py
+
+      - name: Working tree is unchanged
+        # The script edits source in place and restores it. If a run is killed
+        # mid-mutation the tree is left broken, and a later job measuring that
+        # tree would report nonsense. Fail loudly instead.
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::mutation run left the tree modified"
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+          echo "tree clean after mutation run"
+
+  docs:
+    name: docs links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Every local markdown link points at a file that exists
+        # A README that links to a file nobody wrote is a small lie, and this
+        # repository's whole argument is that its documentation matches its
+        # behaviour.
+        run: |
+          python - <<'PY'
+          import re, pathlib, sys
+          root = pathlib.Path(".")
+          link = re.compile(r"\[[^\]]*\]\(([^)#]+?)\)")
+          bad = []
+          for f in list(root.glob("*.md")) + list(root.glob("docs/*.md")):
+              for m in link.finditer(f.read_text(encoding="utf-8")):
+                  u = m.group(1).strip()
+                  if u.startswith(("http://", "https://", "mailto:", "<")):
+                      continue
+                  if not (f.parent / u).resolve().exists():
+                      bad.append(f"{f}: {u}")
+          if bad:
+              print("broken local links:")
+              print("\n".join("  " + b for b in bad))
+              sys.exit(1)
+          print("all local markdown links resolve")
+          PY
