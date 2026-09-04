@@ -459,3 +459,84 @@ def test_scan_of_a_clean_tree_is_empty(tmp_path) -> None:
     """The negative case, so the positives above are not vacuous."""
     root = _repo(tmp_path, 'src/ok.py', 'RIME_API_KEY = your-rime-api-key' + NL)
     assert scan(root) == []
+
+
+# --------------------------------------------------------------------------
+# Vendor-prefixed keys
+#
+# This rule exists because GitHub's push protection rejected a push from this
+# repository over a key class the scanner below had no rule for. The blocked
+# string was a *fake* Stripe restricted key used as an example fixture inside
+# an archived audit report -- harmless in itself, and exactly the point: an
+# external control found a gap in ours, on a project whose own argument is
+# credential hygiene.
+#
+# The honest response to a miss is a rule, not an exception. These are the
+# prefix conventions that actually leak in practice.
+#
+# Every fixture is composed at runtime so no line in this file holds a
+# complete key-shaped literal -- this file is itself walked by
+# test_this_repository_is_clean.
+# --------------------------------------------------------------------------
+
+VENDOR_KEYS = [
+    ("Stripe restricted, live", "rk_" + "live_9f3b2c8a41de47b6a05c7e1d93f8ab24"),
+    ("Stripe secret, live", "sk_" + "live_51H8xKjQm2xLp9wRb7kAAAA"),
+    ("Stripe publishable, test", "pk_" + "test_51H8xKjQm2xLp9wRb7kAAAA"),
+    ("Stripe webhook signing", "whsec_" + "9f3b2c8a41de47b6a05c7e1d9"),
+    ("GitHub PAT, classic", "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"),
+    ("GitHub PAT, fine-grained", "github_pat_" + "11ABCDEFG0aBcDeFgHiJkLmNoPqR"),
+    ("GitHub OAuth", "gho_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"),
+    ("Slack bot token", "xoxb-" + "123456789012-abcdefghijkl"),
+    ("Google API key", "AIza" + "SyD1234567890abcdefghijklmnopqrstu"),
+]
+
+
+@pytest.mark.parametrize("label,key", VENDOR_KEYS, ids=[k[0] for k in VENDOR_KEYS])
+def test_vendor_prefixed_keys_are_flagged(label: str, key: str) -> None:
+    assert hits(key + NL), "missed " + label
+    assert hits("token = " + Q + key + Q + NL), "missed " + label + " as an assignment"
+    assert hits(Q + "k" + Q + ": " + Q + key + Q + NL), "missed " + label + " in JSON"
+
+
+@pytest.mark.parametrize("label,key", VENDOR_KEYS, ids=[k[0] for k in VENDOR_KEYS])
+def test_vendor_prefixed_keys_are_found_behind_a_vendor_name(
+    label: str, key: str
+) -> None:
+    """The F10 property, extended to the new rule. A rule added later must
+    inherit the position-independence the scan loop guarantees, not quietly
+    opt out of it."""
+    line = "API" + "StatusError: message=" + Q + "denied" + Q + ", key=" + key
+    assert hits(line + NL), "missed " + label + " behind a vendor name"
+
+
+@pytest.mark.parametrize(
+    "benign",
+    [
+        "the sk_ prefix is used by stripe",
+        "rk_live_ is a prefix, not a key",
+        "the ghost_ prefix means nothing here",
+        "see https://stripe.com/docs/keys for the whsec_ convention",
+        "AIza is the Google prefix",
+    ],
+)
+def test_prefixes_discussed_in_prose_are_not_credentials(benign: str) -> None:
+    """Documentation talks about these prefixes. Firing on the prose is how a
+    scanner gets switched off."""
+    assert hits(benign + NL) == [], "cried wolf on: " + benign
+
+
+def test_the_archived_audit_no_longer_carries_a_key_shaped_literal() -> None:
+    """A regression guard on the specific thing GitHub rejected.
+
+    The audit reports are shipped in full, deliberately. That means their
+    example fixtures have to be inert -- an illustrative "key" in a report is
+    still a string that every scanner on the internet will flag, and one that
+    blocks a push is one that blocks a submission.
+    """
+    audits = ROOT / "docs" / "audits"
+    if not audits.exists():
+        pytest.skip("no archived audits")
+    for f in audits.glob("*.md"):
+        found = scan_text(f, f.read_text(encoding="utf-8"), str(f))
+        assert not found, f"{f.name} carries {found[0].rule} on line {found[0].line}"

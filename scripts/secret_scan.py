@@ -160,6 +160,33 @@ RULES: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b"),
     ),
     (
+        # Added because GitHub push protection caught a key class this
+        # scanner had no rule for. The blocked string was a *fake* Stripe
+        # restricted key used as an example fixture inside an archived
+        # audit report -- harmless in itself, and exactly the point: an
+        # external control found a gap in ours, on a repository whose own
+        # argument is credential hygiene. A scanner is only as good as its
+        # rule list, and the honest response to a miss is a rule, not an
+        # exception.
+        #
+        # Covers the prefix-and-secret convention shared by Stripe
+        # (sk_/rk_/pk_ + live/test), Stripe webhooks (whsec_), GitHub
+        # tokens (ghp_/gho_/ghs_/ghu_/ghr_/github_pat_), Slack
+        # (xox[baprs]-) and Google API keys (AIza). These are the shapes
+        # that actually leak.
+        "vendor-prefixed key (Stripe / GitHub / Slack / Google)",
+        re.compile(
+            r"\b("
+            r"[sprk]k_(live|test)_[A-Za-z0-9]{16,}"
+            r"|whsec_[A-Za-z0-9]{16,}"
+            r"|gh[pousr]_[A-Za-z0-9]{20,}"
+            r"|github_pat_[A-Za-z0-9_]{20,}"
+            r"|xox[baprs]-[A-Za-z0-9-]{10,}"
+            r"|AIza[A-Za-z0-9_\-]{30,}"
+            r")\b"
+        ),
+    ),
+    (
         "Rime-style key",
         re.compile(r"(?i)\brime[-_]?(api[-_]?)?key\s*[:=]\s*[\"']?([A-Za-z0-9_\-]{20,})"),
     ),

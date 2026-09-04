@@ -498,10 +498,28 @@ hole, not a live leak. But it is the directory a future session dump lands in.
 
 ```python
 def test_scan_finds_a_planted_key(tmp_path):
+    # The literal is composed at runtime so this document does not itself
+    # carry a key-shaped string -- see the editorial note below.
+    planted = "rk_" + "live_" + "9f3b2c8a41de47b6a05c7e1d93f8ab24"
     (tmp_path / "leak.json").write_text(
-        '{"k": "rk_" + "live_" + "9f3b2c8a41de47b6a05c7e1d93f8ab24"}', encoding="utf-8")
+        '{"k": "' + planted + '"}', encoding="utf-8")
     assert scan(tmp_path), "scan() walked the tree but found a planted key"
 ```
+
+> **Editorial note, added when this report was archived.** The example
+> above originally inlined the fake key as a single literal. That string is
+> not a credential and never was -- it is a made-up Stripe-shaped value
+> invented for this illustration -- but GitHub push protection rejected the
+> repository over it, which is the correct behaviour from a scanner that
+> cannot know a key is imaginary. The line is now composed at runtime so the
+> report stays inert.
+>
+> The interesting part is what it exposed: this project's own scanner had
+> **no rule for that key class at all**. An external control found a gap in
+> ours. The fix was a rule, not an exception -- `scripts/secret_scan.py`
+> now covers Stripe, GitHub, Slack and Google prefixes, with tests, and
+> `tests/test_secret_scan.py` asserts that the archived audits themselves
+> scan clean.
 
 and drop `"results"` from `SKIP_DIRS` (keep `results/tmp/`, which is
 gitignored, via a narrower path check). **Estimate: 10 minutes.**
