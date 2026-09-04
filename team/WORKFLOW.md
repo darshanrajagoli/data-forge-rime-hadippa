@@ -3,6 +3,10 @@
 **Read [`START-HERE.md`](START-HERE.md) first. Then find your name below and do
 only that lane.**
 
+> **Who is who.** Lane A is **Arya** (has Claude Pro), Lane B is **Akshat**,
+> Lane C is **Rahul**. If a name here is wrong, fix it in this one table and
+> in `START-HERE.md` — nothing else depends on the names.
+
 ---
 
 ## The deal
@@ -19,7 +23,7 @@ only that lane.**
 |---|---|---|---|
 | **A** | **Arya** | Get it running for real, **record the demo video** | ~90 min |
 | **B** | **Akshat** | Real numbers, real audio, listen to it | ~75 min |
-| **C** | **Darshan** | Be the judge, then write and file the submission | ~75 min |
+| **C** | **Rahul** | Be the judge, then write and file the submission | ~75 min |
 
 **Lane A is the one that decides whether we are eligible at all.** If Arya gets
 blocked, Akshat drops Lane B and takes over Lane A. Say so in the group chat.
@@ -30,7 +34,7 @@ blocked, Akshat drops Lane B and takes over Lane A. Say so in the group chat.
 |---|---|
 | **Arya** | `demo/` (the video) |
 | **Akshat** | `evidence/results/latency.*`, `evidence/results/pronunciation/`, `team/worksheets/MEASUREMENTS.md`, `team/worksheets/LISTENING_NOTES.md` |
-| **Darshan** | `team/worksheets/VERIFICATION.md`, `SUBMISSION.md` |
+| **Rahul** | `team/worksheets/VERIFICATION.md`, `SUBMISSION.md` |
 
 ---
 
@@ -263,11 +267,11 @@ Put the finished file in the `demo/` folder inside the project. Name it
 You can edit both directly on the GitHub website — click the file, click the
 pencil icon, change the line, click **Commit changes**. No download needed.
 
-If you would rather not, just paste the link in the group chat and Darshan
+If you would rather not, just paste the link in the group chat and Rahul
 will do it. **Say which one you did**, so it does not get done twice or not
 at all.
 
-📱 **Send to the group:** `🎬 DEMO IS RECORDED. Length <mm:ss>. Link: <youtube link>. @Darshan it's yours.`
+📱 **Send to the group:** `🎬 DEMO IS RECORDED. Length <mm:ss>. Link: <youtube link>. @Rahul it's yours.`
 
 Then go to **"Uploading your work"** at the bottom.
 
@@ -362,7 +366,7 @@ Then go to **"Uploading your work"** at the bottom.
 
 ---
 
-## 🅲 LANE C — DARSHAN — be the judge, then submit
+## 🅲 LANE C — RAHUL — be the judge, then submit
 
 **Two jobs. First you try to break our own instructions. Then you write the
 submission.**
@@ -451,7 +455,10 @@ Go through this list. Every box must be genuinely ticked.
 
 ### C4 — Submit
 
-Submit through the DataForge portal with the YouTube link and the GitHub link:
+Submit through the DataForge portal with the YouTube link and the GitHub link.
+If the portal login is not yours, post both links in the group and say
+**"ready to submit"** — do not leave it assumed.
+
 `https://github.com/darshanrajagoli/data-forge-rime-hadippa`
 
 📱 **Send to the group:** `✅ SUBMITTED. We're done.`
@@ -574,10 +581,10 @@ Trying with AI now, will update in 15 min.
 
 **Arya only, the one everyone is waiting for:**
 ```
-🎬 DEMO IS RECORDED. Length <mm:ss>. Link: <youtube link>. @Darshan it's yours.
+🎬 DEMO IS RECORDED. Length <mm:ss>. Link: <youtube link>. @Rahul it's yours.
 ```
 
-**Darshan only, the last one:**
+**Rahul only, the last one:**
 ```
 ✅ SUBMITTED. We're done. 🎉
 ```
