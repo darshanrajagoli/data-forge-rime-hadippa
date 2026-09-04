@@ -161,8 +161,8 @@ Three people, three lanes, running at the same time. **Nobody waits for anybody
 
 | Lane | Person | What it is |
 |---|---|---|
-| **A** | **Arya** | Get it running for real, and **record the demo video.** This is the one that decides whether we are eligible. |
-| **B** | **Akshat** | Get the real numbers and the real audio. Listen to it. Write down what you actually heard. |
+| **A** | **Arrya** | Get it running for real, and **record the demo video.** This is the one that decides whether we are eligible. |
+| **B** | **Akshay** | Get the real numbers and the real audio. Listen to it. Write down what you actually heard. |
 | **C** | **Rahul** | Be the judge. Follow our own instructions from scratch, catch what is wrong, then write and file the submission. |
 
 Full copy-paste instructions are in **[`WORKFLOW.md`](WORKFLOW.md)**.

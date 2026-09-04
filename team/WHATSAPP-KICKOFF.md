@@ -26,9 +26,9 @@ Ok team, project is built and on GitHub. Read this once, it's 2 minutes, then we
 
 *Lanes — all three run at the same time, nobody waits for anybody:*
 
-🅰️ *Arya* — get it running for real and *record the 4:30 demo video.* You've got Claude Pro so you get the hardest one. The script is written out shot by shot in `DEMO_SCRIPT.md`, literally every line you say. ~90 min. *This is the one that decides whether we're eligible at all.*
+🅰️ *Arrya* — get it running for real and *record the 4:30 demo video.* You've got Claude Pro so you get the hardest one. The script is written out shot by shot in `DEMO_SCRIPT.md`, literally every line you say. ~90 min. *This is the one that decides whether we're eligible at all.*
 
-🅱️ *Akshat* — grab a free Rime key, run two commands to get the real speed numbers, then render the audio and *actually listen to it* and write down what you heard. You'll be the first person ever to hear this thing talk. ~75 min.
+🅱️ *Akshay* — grab a free Rime key, run two commands to get the real speed numbers, then render the audio and *actually listen to it* and write down what you heard. You'll be the first person ever to hear this thing talk. ~75 min.
 
 🅲 *Rahul* — play judge: fresh download, follow our own README exactly as written, and write down every place it's wrong or confusing. Then write up the submission. ~75 min. You need zero API keys for this one, so you can start immediately.
 
@@ -39,7 +39,7 @@ Ok team, project is built and on GitHub. Read this once, it's 2 minutes, then we
 
 *If you get stuck* (expected, don't burn 40 min on it): open ChatGPT or Gemini, upload `HANDOFF.md` + `team/WORKFLOW.md` + whatever file you're stuck on, and there's a ready-made prompt at the bottom of `WORKFLOW.md` under "When you are stuck" — just fill in the blanks and paste it. It tells the AI you're not a programmer and to go one step at a time.
 
-*One more thing for Arya:* when the video's up, the YouTube link needs to go into the Deliverables table at the top of `README.md` AND `SUBMISSION.md` — both currently say `FILL:`. You can edit those straight on the GitHub website (click file → pencil icon → Commit changes). If you'd rather not, just drop the link here and Rahul will do it — but say which.
+*One more thing for Arrya:* when the video's up, the YouTube link needs to go into the Deliverables table at the top of `README.md` AND `SUBMISSION.md` — both currently say `FILL:`. You can edit those straight on the GitHub website (click file → pencil icon → Commit changes). If you'd rather not, just drop the link here and Rahul will do it — but say which.
 
 *Uploading your work:* you don't need git. Go to the GitHub link, click into the folder, `Add file` → `Upload files`, drag it in, `Commit changes`. That's it.
 
