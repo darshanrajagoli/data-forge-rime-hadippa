@@ -94,19 +94,22 @@ Full output, regenerated on every run:
 ### Test suite
 
 ```bash
-pytest        # 350 passed in ~6s
+pytest        # 425 passed in ~6s
 ```
 
 | File | Tests | Covers |
 |---|---|---|
 | `test_fencing.py` | **112** | every fence invariant, plus 70 seeded fuzz runs |
+| `test_secret_scan.py` | 66 | real keys in source *and* JSON, the vendor's own class names, and the tree walk itself |
 | `test_pronounce.py` | 63 | numbers for the ear, lexicon, model-compatibility gate |
-| `test_secret_scan.py` | 40 | catches real keys; does not cry wolf |
 | `test_dispatch.py` | 34 | mutation log, stop resolution, synthetic-data guarantees |
-| `test_config.py` | 29 | loud failures, disclosed degradations, secret redaction |
+| `test_config.py` | 29 | loud failures, disclosed degradations, secret redaction, endpoint derivation |
+| `test_agent.py` | 28 | the `_read` / `_write` fence integration, and the heard-not-said pipeline end to end |
 | `test_heard.py` | 22 | exact and estimated boundaries, chat-text truncation |
 | `test_metrics.py` | 22 | cold/warm and boundary separation |
-| `test_agent.py` | 28 | the `_read` / `_write` fence integration, and the heard-not-said pipeline end to end |
+| `test_prompts.py` | 22 | that the agent is still told to speak for the ear |
+| `test_wiring.py` | 16 | `build_tts` / `build_session` / `attach_observers` — whether barge-in is on at all |
+| `test_preflight.py` | 11 | the gate that decides the demo may be recorded |
 
 ### The fuzz test is the load-bearing one
 
@@ -128,57 +131,112 @@ by agreeing with a bug in the code under test.
 `test_fuzz_with_origins_never_leaks_a_write` adds 30 more runs where turns die
 and keep issuing work.
 
-### Five bugs this found
+### Ten bugs this found
 
 Reported because "we wrote tests" is worth less than "the tests caught
-something". Bugs 3, 4 and 5 were found by an adversarial review pass *after*
-the first version was declared finished, which is its own data point about what
-a green suite does and does not tell you.
+something", and because the *pattern* is more useful than the list. Two
+independent adversarial passes were run after this project was first declared
+finished. Each found real defects. The second one found the worst.
 
-1. **Fence-sync ordering.** `_read`/`_write` originally synced the fence
-   *before* issuing the ticket, which advanced the generation and then stamped
-   the ticket with the new one — laundering a dead turn's request into a fresh
-   one. Caught by `test_agent.py`. Fixed by issuing first; the reasoning is at
-   the fix site in `agent.py`.
+**Found during development, by the suite itself**
+
+1. **Fence-sync ordering.** `_read`/`_write` synced the fence *before* issuing
+   the ticket, advancing the generation and then stamping the ticket with the
+   new one — laundering a dead turn's request into a fresh one. Caught by
+   `test_agent.py`.
 2. **Turn-origin retirement.** The generation counter advances once per
-   barge-in, so a *second* tool issued by an already-interrupted turn was
-   stamped with the new generation and looked current. Caught by acceptance
-   scenario **A2**, which committed two of three stale writes. Fixed by
-   stamping each ticket with its originating `SpeechHandle.id` and retiring
-   dead turns — `TurnFence._supersession_reason` now has two independent
-   causes. Tests: `test_second_tool_from_a_dead_turn_is_still_fenced` and
-   seven siblings.
-3. **Sub-claim (c) was never wired in.** `transcription_node` registered each
+   barge-in, so a *second* tool issued by an already-interrupted turn looked
+   current. Caught by acceptance scenario **A2**, which committed two of three
+   stale writes. Fixed by stamping each ticket with its originating
+   `SpeechHandle.id`; `TurnFence._supersession_reason` now has two independent
+   causes.
+
+**Found by the first adversarial pass**
+
+3. **Sub-claim (c) was never wired in.** `transcription_node` registered every
    utterance with an *empty string* and nothing ever called
    `HeardTracker.cut()`, so the reconciliation returned `""` and no playback
-   record was ever written. The module tests passed throughout, because they
+   record was ever written. All 22 module tests passed throughout, because they
    fed the tracker real text directly and never went through the agent. This is
-   the exact failure mode of testing a component instead of a path. Fixed by
-   collecting the text and the marks together in `transcription_node` and
-   reconciling from the speech handle's done callback; regression tests drive
-   the agent's own pipeline, and `evidence/mutation_test.py` reverts both halves
-   of the bug to prove they fail.
+   the exact failure mode of testing a component instead of a path.
 4. **The error path bypassed the fence.** `except DispatchError` cancelled the
-   ticket and then returned a *speakable* string regardless of whether the turn
-   was still alive, so a superseded turn's error reached the driver. An error is
-   a tool result; the headline claim covers it. Fixed by checking the fence
-   before cancelling. Tests: `test_superseded_read_error_is_not_spoken`,
-   `test_superseded_write_error_is_not_spoken`, and
-   `test_a_live_turn_still_hears_its_error` so the fix does not over-correct
-   into silencing live errors.
-5. **The word-timestamp measurement read attributes that do not exist.**
-   `evidence/measure_heard_accuracy.py` looked for `ev.timed_words`,
-   `ev.words` and `ev.alignment` on the synthesis event. `SynthesizedAudio`
-   carries only `frame`, `request_id`, `is_final`, `segment_id` and
-   `delta_text` -- so the script would have reported "no word timestamps
-   arrived" on every run while looking like a working measurement, and the
-   honest-failure path would have fired for a dishonest reason. The Rime plugin
-   pushes timings via `AudioEmitter.push_timed_transcript`, and the framework
-   attaches them to the *audio frame's* userdata under
-   `USERDATA_TIMED_TRANSCRIPT` (`"lk.timed_transcripts"`). Fixed to read that,
-   verified against the installed package. This one had no test to catch it,
-   because it only runs with credentials -- which is exactly why the limitation
-   list below distinguishes what is proven offline from what is not.
+   ticket and returned a *speakable* string regardless of whether the turn was
+   alive, so a superseded turn's error reached the driver. An error is a tool
+   result; the headline claim covers it.
+5. **The word-timestamp read used attributes that do not exist.**
+   `ev.timed_words` / `ev.words` / `ev.alignment` are not on
+   `SynthesizedAudio`. The measurement would have reported "no word timestamps
+   arrived" on every run — its honest-failure path firing for a dishonest
+   reason.
+
+**Found by the second adversarial pass — the expensive ones**
+
+6. **No script in the repository could make a Rime API call. Two bugs, four
+   call sites.** `TTS.synthesize()` is the one-shot *HTTP* method and the Rime
+   plugin raises unconditionally when the TTS was built for WebSocket — which
+   is the shipped default. Separately, plugins need an HTTP context that only
+   the agent worker opens. Together this meant `scripts/preflight.py` could
+   **never exit 0**, in any configuration, with any credential — and
+   `DEMO_SCRIPT.md`'s first instruction is *"do not proceed until preflight is
+   clean"*. Two of four work lanes produced nothing. Not one audio sample had
+   ever been rendered. Worse than the outage: preflight blamed the API key for
+   a code bug, sending the reader to rotate a credential that was fine.
+   Fixed by `evidence/_rime.py` — one transport-aware helper selecting on the
+   public `tts.capabilities.streaming`, plus `http_context.open()` — wired into
+   all four call sites. Verified against the live service: a dummy key now
+   returns a real 401 over `wss://users-ws.rime.ai/ws3` instead of raising
+   before any I/O. Tests: `tests/test_preflight.py` (11).
+7. **The disclosed endpoint was the wrong host.** The banner, `/api/config`,
+   the browser console and the README all reported `users.rime.ai` — the HTTP
+   host — while the shipped WebSocket path streams from `users-ws.rime.ai`.
+   `endpoint` is one of six fields the brief names explicitly, and the banner
+   is printed to a terminal that gets screen-recorded. `Settings.endpoint` now
+   derives from the transport, and
+   `test_the_disclosed_endpoint_is_the_one_that_will_be_called` compares it
+   against the URL the plugin will actually build.
+8. **The wiring layer had no tests, and barge-in could be silently disabled.**
+   `build_tts` / `build_session` / `attach_observers` — the code that decides
+   which model speaks and *whether interruption is enabled at all* — was
+   untested. 9 of the first 12 mutations written against it survived. Setting
+   `interruption {"enabled": False}` left all tests, all six acceptance
+   scenarios and the first mutation harness green with the product's only
+   feature switched off. Fixed by `tests/test_wiring.py` (16), which asserts
+   against constructed objects rather than the settings they came from.
+9. **The credential scanner's own test could not fail, and it was blind to two
+   things.** `test_this_repository_is_clean` asserts `scan()` returns nothing —
+   so it passes *more easily* when the scanner is broken; a mutation making
+   `scan()` return `[]` was invisible to all 40 tests. While fixing that, two
+   more holes surfaced: `SKIP_DIRS` contained the bare word `results`, so
+   `evidence/results/**` — the committed-artifact directory — was never walked;
+   and the assignment rule matched `key = "..."` but not `"key": "..."`, so a
+   credential in JSON was undetectable. Every artifact in that directory is
+   JSON. **The two gaps hid each other.**
+10. **The scanner reported the vendor's own exception classes as leaked keys.**
+    The LiveKit key rule matches `API` + 10 characters, which is also the shape
+    of `APIConnectionError`, `APIStatusError`, `APITimeoutError` and
+    `APIConnectOptions`. Six places in this repository format errors as
+    `type(exc).__name__`, and `docs/MEASUREMENTS.md` asks the reader to paste
+    failures in — so the pre-commit hook would have blocked a commit and
+    reported a credential leak in a line containing none. Fixed with an
+    allowlist **subtracted from matches**, not by narrowing the pattern: the
+    obvious narrowing (reject CamelCase tails) also stops detecting real keys
+    like `API` + `Rb7kQm2xLp9w`, and a false negative in a security control is
+    strictly worse than the noise it removes.
+    `test_a_real_key_shaped_like_a_vendor_name_is_still_flagged` pins that.
+
+**Found while fixing the above**
+
+- **Order-dependent test flakiness.** The new wiring tests passed in isolation
+  and failed in a full run: `AgentSession.__init__` calls
+  `asyncio.get_event_loop()`, which raises once an earlier async test has
+  closed the loop. Written synchronously they were green alone and red
+  together — worse than a plain failure, because it reads as a fluke. All
+  session-constructing tests are now `async`.
+
+The through-line in almost all of these: **documentation and code disagreed,
+and the tests agreed with neither** — and the tests that existed were tests of
+*components*, not of *paths*. Both mutation harnesses now run in CI so that the
+next instance of it fails a build instead of reaching a judge.
 
 ### What was verified against the installed package, not assumed
 
@@ -197,7 +255,7 @@ installed code rather than recalled:
 
 ### Do the tests mean anything? Mutation testing
 
-"350 tests pass" is not evidence. A suite that stays green when you break the
+"425 tests pass" is not evidence. A suite that stays green when you break the
 code it guards is worse than no suite, because it converts absence of signal
 into confidence. So the claim is checked directly:
 

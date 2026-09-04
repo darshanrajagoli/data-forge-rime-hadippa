@@ -9,7 +9,7 @@ No credentials, no network, no audio device.
 
 Why this exists
 ---------------
-"350 tests pass" is not evidence. A suite that stays green when you break the
+"425 tests pass" is not evidence. A suite that stays green when you break the
 thing it is supposed to be guarding is worse than no suite, because it converts
 absence of signal into false confidence. The only way to know a test asserts
 something is to make the assertion false and watch it fail.

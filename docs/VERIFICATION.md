@@ -19,9 +19,10 @@
 |---|---|---|---|
 | Clone | `git clone <repo>` | TODO | TODO |
 | Install | `pip install -e ".[dev]"` | TODO | TODO |
-| Test suite | `pytest` | TODO (expect: 350 passed) | TODO |
+| Test suite | `pytest` | TODO (expect: 425 passed) | TODO |
 | Acceptance | `python evidence/run_acceptance.py` | TODO (expect: 6/6, 36 checks) | TODO |
-| Mutation test | `python evidence/mutation_test.py` | TODO (expect: 15/15 caught) | TODO |
+| Mutation test (core) | `python evidence/mutation_test.py` | TODO (expect: 15/15) | TODO |
+| Mutation test (wiring) | `python evidence/mutation_test_ii.py` | TODO (expect: 13/13) | TODO |
 | Secret scan | `python scripts/secret_scan.py` | TODO (expect: clean) | TODO |
 | Offline preflight | `python scripts/preflight.py --offline` | TODO | TODO |
 

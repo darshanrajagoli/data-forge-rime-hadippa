@@ -1,6 +1,6 @@
 # WORKFLOW — from here to submitted
 
-**The code is finished.** 350 tests pass, the acceptance harness passes 6/6,
+**The code is finished.** 425 tests pass, the acceptance harness passes 6/6,
 the docs are written. What is left is the part software cannot do: getting API
 keys, listening to audio with human ears, talking into a microphone, and
 pressing submit.
@@ -189,7 +189,7 @@ pytest
 python evidence/run_acceptance.py
 ```
 
-You should see **350 passed** and **6/6 scenarios passed**. This needs no keys
+You should see **425 passed** and **6/6 scenarios passed**. This needs no keys
 and no internet.
 
 **If you see anything else, stop and post the output in the group chat.** Four
@@ -555,7 +555,7 @@ the suggestion in the group chat instead.
 
 - [ ] Repo public on GitHub, clones clean *(Akshay verified)*
 - [ ] GitHub Actions badge is green and the `REPLACE-ME` in its URL is fixed *(Darshan)*
-- [ ] `pytest` → 350 passed, on at least three different laptops
+- [ ] `pytest` → 425 passed, on at least three different laptops
 - [ ] `python evidence/run_acceptance.py` → 6/6
 - [ ] `python scripts/preflight.py` → exit 0 on the recording machine *(Darshan)*
 - [ ] `python scripts/secret_scan.py` → clean
@@ -575,4 +575,4 @@ polishing anything.
 And if a measurement comes out worse than we hoped, **report it as it is.** The
 brief says unverified performance numbers get no credit, and judges check.
 A modest number with an honest method beats a good number nobody can reproduce
-— and we have a fence, a fuzzer and 350 tests to stand on regardless.
+— and we have a fence, a fuzzer and 425 tests to stand on regardless.

@@ -1,7 +1,7 @@
 {
   "meta": {
-    "run_at": "2026-09-04T11:31:58+0530",
-    "commit": "(not a git checkout)",
+    "run_at": "2026-09-04T11:45:14+0530",
+    "commit": "2808968",
     "python": "3.12.0",
     "requires_network": false,
     "requires_credentials": false
@@ -57,12 +57,12 @@
           "marks": [
             {
               "generation": 0,
-              "at": 1628812.281,
+              "at": 1629608.656,
               "reason": "session_start"
             },
             {
               "generation": 1,
-              "at": 1628812.687,
+              "at": 1629609.062,
               "reason": "speech_handle.interrupted"
             }
           ],
@@ -83,8 +83,8 @@
               "issued_generation": 0,
               "observed_generation": 1,
               "disposition": "fenced_stale",
-              "issued_at": 1628812.281,
-              "resolved_at": 1628812.687,
+              "issued_at": 1629608.656,
+              "resolved_at": 1629609.062,
               "latency_ms": 406.0,
               "detail": "origin 'speech-1' retired (turn interrupted)"
             }
@@ -210,12 +210,12 @@
         {
           "label": "satisfying the new turn cost zero extra backend calls",
           "passed": true,
-          "detail": "backend call count unchanged at 2; the alternative is a second lookup costing about 402ms."
+          "detail": "backend call count unchanged at 2; the alternative is a second lookup costing about 405ms."
         },
         {
           "label": "the re-anchor decision itself is effectively free",
           "passed": true,
-          "detail": "0.005ms in-process, against a 402ms round trip."
+          "detail": "0.004ms in-process, against a 405ms round trip."
         },
         {
           "label": "fence accounting balances",
@@ -224,8 +224,8 @@
         }
       ],
       "artifacts": {
-        "round_trip_ms": 402.1,
-        "reanchor_decision_ms": 0.0052,
+        "round_trip_ms": 404.5,
+        "reanchor_decision_ms": 0.0038,
         "backend_calls_for_second_turn": 0
       }
     },
@@ -344,7 +344,7 @@
             "fenced_cancelled": 1
           },
           "tool_latency_ms": {
-            "p50": 63.0,
+            "p50": 78.0,
             "p95": 78.0,
             "max": 78.0
           }

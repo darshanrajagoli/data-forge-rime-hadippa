@@ -93,7 +93,7 @@ git clone <this repo> && cd waypoint
 python -m venv .venv && . .venv/Scripts/activate   # Linux/macOS: . .venv/bin/activate
 pip install -e ".[dev]"
 
-pytest                                  # 350 tests, ~6s, no network
+pytest                                  # 425 tests, ~6s, no network
 python evidence/run_acceptance.py        # the 6 acceptance scenarios
 ```
 
@@ -268,7 +268,7 @@ ignored every marker still could not commit a stale write, because
 | What | Command | Needs a key? | Output |
 |---|---|---|---|
 | The six acceptance scenarios | `python evidence/run_acceptance.py` | no | [`reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Test suite | `pytest` | no | 350 passing |
+| Test suite | `pytest` | no | 425 passing |
 | Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | `results/latency.md` |
 | Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | `results/pronunciation/` |
 | Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | yes | `results/heard_accuracy.md` |
@@ -279,22 +279,29 @@ The full claim, acceptance test, procedure and limitations are in
 
 ### The tests are checked too
 
-`pytest` reporting 350 passes is not evidence on its own — a suite that stays
+`pytest` reporting 425 passes is not evidence on its own — a suite that stays
 green when you break the code it guards converts absence of signal into
-confidence. So:
+confidence. So there are two mutation harnesses, and between them 28 targets:
 
 ```bash
-python evidence/mutation_test.py     # ~2 min, no credentials
+python evidence/mutation_test.py       # 15 targets, the tested core
+python evidence/mutation_test_ii.py    # 13 targets, everything else
 ```
 
-It introduces 15 specific, plausible bugs one at a time — the fence admitting
-stale results, the effect-boundary check skipped, gate codes read back as
-quantities, cold and warm runs sharing a series — runs the whole suite against
-each, restores the file, and **exits non-zero if any mutant survives**. Six of
-the fifteen are bugs that were genuinely written during development, so those
-regression tests are verified against the thing they exist to catch.
+Each introduces one specific, plausible bug at a time, runs the whole suite
+against it, restores the file, and **exits non-zero if any mutant survives**.
+Both take an exclusive lock, refuse to start on an already-mutated tree, verify
+every restore, and ship a `--repair` mode.
 
-Current result: **15/15 caught.**
+The second harness exists because the first one had a shape. All fifteen of its
+targets land in code a unit test calls directly, and **9 of the first 12
+mutations written against the wiring layer survived** — including
+`interruption {"enabled": False}`, which disables the only feature this product
+has. All 425 tests, all six acceptance scenarios and the first harness's 15/15
+stayed green with barge-in switched off. `tests/test_wiring.py` and
+`tests/test_preflight.py` were written to close that, and did.
+
+Current result: **15/15 and 13/13 — 28 of 28, none surviving.** Both run in CI.
 
 ### Verified continuously, on hardware we do not control
 

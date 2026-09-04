@@ -56,9 +56,10 @@ gate, plus turn-origin retirement. `src/waypoint/fencing.py`.
 ## Evidence, in one command
 
 ```bash
-pytest                                # 350 tests, ~6s, no credentials
+pytest                                # 425 tests, ~11s, no credentials
 python evidence/run_acceptance.py     # 6/6 scenarios, 36 checks, no credentials
-python evidence/mutation_test.py      # 15/15 deliberate bugs caught by the suite
+python evidence/mutation_test.py      # 15/15 deliberate bugs caught
+python evidence/mutation_test_ii.py   # 13/13 more, in the wiring layer
 ```
 
 The acceptance test was written before the demo. It drives the real agent code
@@ -67,14 +68,21 @@ the central claim on their own machine without our keys.
 
 The third command is the one we would point a sceptical judge at first. It
 breaks the code fifteen different ways and checks that a test notices each time
-— because "350 tests pass" says nothing until you know the tests would fail.
+— because "425 tests pass" says nothing until you know the tests would fail.
 
-**Five** real bugs were found and fixed this way. Three came from adversarial
-review passes run *after* the project was declared finished — one of them a
-headline claim that had never been wired into the agent at all while its module
-tests stayed green, and one a family of measurement scripts that could not make
-a single Rime API call in any configuration. All five are written up in
-`RIME_EVIDENCE.md` §3, including what the tests missed and why.
+**Ten** real bugs were found and fixed this way. Eight came from two
+independent adversarial passes run *after* the project was declared finished.
+The worst was not in the fence at all: **no script in the repository could make
+a single Rime API call**, in any configuration, with any credential — so the
+preflight gate that `DEMO_SCRIPT.md` requires before recording could never
+pass, and it blamed the API key for a code bug. The second worst: the wiring
+layer had no tests, and disabling barge-in entirely left all 425 tests, all six
+acceptance scenarios and the first mutation harness green.
+
+All ten are written up in `RIME_EVIDENCE.md` §3, with what the tests missed and
+why. The review that found the last five is archived verbatim at
+[`docs/audits/AUDIT-2.md`](docs/audits/AUDIT-2.md), with a table mapping each
+finding to its fix.
 
 Full claim, procedure, results and limitations: **`RIME_EVIDENCE.md`**.
 
@@ -109,7 +117,7 @@ installed package, not recalled. FILL: add anything else the team used.
 | **Problem and necessity of voice — 25%** | A driver legally cannot use a screen. `README.md` opening; Shot 1 of the demo. |
 | **Hard voice engineering — 25%** | `src/waypoint/fencing.py`, and the `_read`/`_write` integration in `agent.py`. `RIME_EVIDENCE.md` §6 states exactly what LiveKit already does, so the contribution is not overclaimed. |
 | **Rime integration and voice experience — 20%** | `build_tts()`; the WebSocket word-timestamp dependency; `pronounce.py` and the Coda/Mist trade-off; exact config table in `README.md`. |
-| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 350 tests, and `evidence/mutation_test.py` which proves the tests would fail if the code broke (15/15). Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block** — the central claim is checkable without our keys. |
+| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 425 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 28 targets, 28 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, and an archived adversarial audit with every finding mapped to its fix. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block** — the central claim is checkable without our keys. |
 | **Demo clarity — 10%** | `DEMO_SCRIPT.md`; the browser fence board makes the withholding visible, which listening alone cannot. |
 
 ## Eligibility self-check
@@ -127,9 +135,10 @@ Every disqualifier in the brief, and where it is ruled out.
 
 - [ ] GitHub Actions `verify` is green on the submitted commit
 - [ ] `python scripts/preflight.py` exits 0 on the recording machine
-- [ ] `pytest` → 350 passed
+- [ ] `pytest` → 425 passed
 - [ ] `python evidence/run_acceptance.py` → 6/6
 - [ ] `python evidence/mutation_test.py` → 15/15 caught
+- [ ] `python evidence/mutation_test_ii.py` → 13/13 caught
 - [ ] `python scripts/secret_scan.py` → clean
 - [ ] `git log -p | grep -i "api.key\|secret"` shows nothing real
 - [ ] Demo is under 5:00 and shows all seven required elements (`DEMO_SCRIPT.md`)

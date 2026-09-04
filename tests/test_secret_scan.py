@@ -301,3 +301,76 @@ def test_json_shaped_credentials_are_caught(name: str, value: str) -> None:
 def test_json_placeholders_are_not_flagged(value: str) -> None:
     line = "{" + Q + "api_key" + Q + ": " + Q + value + Q + "}"
     assert hits(line + NL, Path("artifact.json")) == [], "false positive: " + line
+
+
+# --------------------------------------------------------------------------
+# The walk itself
+#
+# Every other test in this file exercises scan_text -- the rule engine. None
+# exercised scan(), the function that walks the tree, and the only test that
+# called it asserted it returns NOTHING. That test passes *more easily* when
+# the scanner is broken: a mutation making scan() return [] unconditionally
+# was invisible to the entire suite.
+#
+# These plant a key and require it to be found. Verified against that exact
+# mutation, which is the whole point of a regression test.
+# --------------------------------------------------------------------------
+
+
+def _repo(tmp_path, rel: str, body: str):
+    (tmp_path / '.gitignore').write_text('.env' + NL + '.env.local' + NL,
+                                         encoding='utf-8')
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding='utf-8')
+    return tmp_path
+
+
+def _planted() -> str:
+    return '{' + Q + 'api_key' + Q + ': ' + Q + RIME_K + Q + '}'
+
+
+def test_scan_walks_the_tree_and_finds_a_planted_key(tmp_path) -> None:
+    """If scan() ever stops walking, this is the test that says so."""
+    root = _repo(tmp_path, 'src/leak.py', 'API_KEY = ' + Q + RIME_K + Q + NL)
+    findings = scan(root)
+    assert findings, 'scan() returned nothing for a tree containing a key'
+    assert findings[0].path.endswith('leak.py')
+
+
+def test_scan_reaches_the_committed_artifact_directory(tmp_path) -> None:
+    """evidence/results/ holds committed artifacts and agent session dumps.
+
+    It was in SKIP_DIRS as the bare word 'results', so the whole tree was
+    invisible -- and every artifact in it is JSON, which the assignment rule
+    could not match either. The two gaps hid each other.
+    """
+    root = _repo(tmp_path, 'evidence/results/session.json', _planted())
+    findings = scan(root)
+    assert findings, 'evidence/results is not being walked'
+    assert 'results' in findings[0].path
+
+
+def test_scan_reaches_a_nested_artifact_subdirectory(tmp_path) -> None:
+    root = _repo(tmp_path, 'evidence/results/pronunciation/report.json', _planted())
+    assert scan(root)
+
+
+def test_gitignored_scratch_subdirectory_is_still_skipped(tmp_path) -> None:
+    """The one path that stays excluded, and only that one."""
+    root = _repo(tmp_path, 'evidence/results/tmp/scratch.json', _planted())
+    assert scan(root) == []
+
+
+def test_scan_returns_findings_from_several_files(tmp_path) -> None:
+    """Guards against a scan() that stops at the first hit."""
+    root = _repo(tmp_path, 'a/one.json', _planted())
+    (root / 'b').mkdir()
+    (root / 'b' / 'two.json').write_text(_planted(), encoding='utf-8')
+    assert len(scan(root)) >= 2
+
+
+def test_scan_of_a_clean_tree_is_empty(tmp_path) -> None:
+    """The negative case, so the positives above are not vacuous."""
+    root = _repo(tmp_path, 'src/ok.py', 'RIME_API_KEY = your-rime-api-key' + NL)
+    assert scan(root) == []

@@ -149,7 +149,9 @@ jobs:
           root = pathlib.Path(".")
           link = re.compile(r"\[[^\]]*\]\(([^)#]+?)\)")
           bad = []
-          for f in list(root.glob("*.md")) + list(root.glob("docs/*.md")):
+          # docs/**/*.md, not docs/*.md -- the archived audits live in a
+          # subdirectory and their links need checking too.
+          for f in list(root.glob("*.md")) + list(root.glob("docs/**/*.md")):
               for m in link.finditer(f.read_text(encoding="utf-8")):
                   u = m.group(1).strip()
                   if u.startswith(("http://", "https://", "mailto:", "<")):
