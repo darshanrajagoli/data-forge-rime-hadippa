@@ -110,15 +110,15 @@ Paste them into a note on your own machine. You will need them in step 1.
 
 Everyone else: keep doing 0a–0c, this does not block you.
 
+**The local repository is already initialised and committed.** You do not need
+`git init` or a first commit — just point it at GitHub and push.
+
 ```bash
 cd "C:/Users/darsh/OneDrive/Desktop/DataForge/waypoint"
-
-git init
-git add -A
-git commit -m "Waypoint: turn-fenced voice agent on LiveKit + Rime"
+git log --oneline          # you should see one commit already
 ```
 
-Then create the repo. Easiest way, if you have the GitHub CLI:
+Easiest way, if you have the GitHub CLI:
 
 ```bash
 gh auth login

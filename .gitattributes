@@ -1,0 +1,20 @@
+# Normalise line endings.
+#
+# Four people on four laptops, at least one of them Windows. Without this, git
+# converts LF to CRLF on checkout, and the mutation harnesses match multi-line
+# snippets against file contents -- so a CRLF checkout would silently report
+# SKIP for every multi-line mutation, which looks like coverage while measuring
+# nothing. Both harnesses defend against that in code (`localise`), and this
+# removes the need to.
+#
+# It also keeps the SHA-256 restore verification meaningful across machines.
+
+* text=auto eol=lf
+
+# Binary: never touch these.
+*.wav binary
+*.mp3 binary
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.mov binary
