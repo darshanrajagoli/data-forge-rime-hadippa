@@ -21,7 +21,7 @@ if not decision.speak:
 
 That is the whole design. The value of a single choke point is that the
 invariant can be tested exhaustively in one place rather than argued about at
-every call site — which is why 112 of the 549 tests live on this module and 70
+every call site — which is why 112 of the 573 tests live on this module and 70
 of them are fuzz runs.
 
 ## Two independent supersession causes

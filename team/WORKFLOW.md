@@ -108,14 +108,14 @@ the word `ERROR`.
 pytest
 ```
 
-**You should see `549 passed`.** If you do, everything is set up correctly and
+**You should see `573 passed`.** If you do, everything is set up correctly and
 you can start your lane.
 
 > **Every time you open a new terminal from now on**, you must run the
 > `activate` command from step 0.4 again first. If a command suddenly says
 > "module not found", that is why.
 
-📱 **Send to the group:** `Setup done, 549 passed. Starting Lane <A/B/C>.`
+📱 **Send to the group:** `Setup done, 573 passed. Starting Lane <A/B/C>.`
 
 ---
 
@@ -245,13 +245,27 @@ going. The brief specifically asks for a stress case, and a real failure handled
 openly reads better than a fourth take. `DEMO_SCRIPT.md` has a table of exactly
 what to say for each kind of failure.
 
-### A7 — Save the video
+### A7 — Save the video and post the link
 
 Put the finished file in the `demo/` folder inside the project. Name it
 `waypoint-demo.mp4`.
 
-**Also upload it to YouTube as "Unlisted"** and copy the link — Darshan needs
-that link for the submission form.
+**Then upload it to YouTube as "Unlisted"** and copy the link.
+
+**That link has to go in two files.** Both of them currently say
+`FILL: unlisted YouTube link` — search for `FILL:` and replace it:
+
+| File | Where |
+|---|---|
+| `README.md` | the **Deliverables** table, first row |
+| `SUBMISSION.md` | the **Deliverables** table, first row |
+
+You can edit both directly on the GitHub website — click the file, click the
+pencil icon, change the line, click **Commit changes**. No download needed.
+
+If you would rather not, just paste the link in the group chat and Darshan
+will do it. **Say which one you did**, so it does not get done twice or not
+at all.
 
 📱 **Send to the group:** `🎬 DEMO IS RECORDED. Length <mm:ss>. Link: <youtube link>. @Darshan it's yours.`
 
@@ -406,6 +420,11 @@ what is and is not proven. Copy from there; do not invent anything.
 - The YouTube link (from Arya)
 - The measured numbers (from Akshat's `MEASUREMENTS.md`)
 
+**Check the Deliverables table at the top of `README.md` and `SUBMISSION.md`.**
+Both have a `FILL: unlisted YouTube link` row. Arya may already have replaced
+them — check the group chat. If not, do it yourself. **A submission whose own
+README does not link the demo is one a judge may never find the demo in.**
+
 If either has not arrived yet, do everything else first and leave those two
 blanks until last. Do not wait around.
 
@@ -418,7 +437,7 @@ Go through this list. Every box must be genuinely ticked.
 - [ ] The video says out loud **which speech provider is being used** (it must
       say Rime) and shows it on screen
 - [ ] The video shows **one deliberate failure or stress case** (the interruption)
-- [ ] `pytest` → `549 passed`
+- [ ] `pytest` → `573 passed`
 - [ ] `python evidence/run_acceptance.py` → `6/6 scenarios passed (36 checks)`
 - [ ] `python scripts/secret_scan.py` → **`clean`**
 - [ ] Nobody's real API key is in any file that got uploaded — **check
@@ -534,7 +553,7 @@ before giving me the next one.
 
 **When you start:**
 ```
-Starting Lane <A/B/C>. Setup done, 549 tests passing.
+Starting Lane <A/B/C>. Setup done, 573 tests passing.
 ```
 
 **When you finish:**

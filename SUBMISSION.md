@@ -1,5 +1,16 @@
 # Submission — Waypoint
 
+## Deliverables
+
+| | Link |
+|---|---|
+| **Demo video** (4:30, unlisted) | `FILL: YouTube link` |
+| **Repository** | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
+| **CI, green on every push** | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) |
+| **Evidence** | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
+| **Full project explainer** | [`HANDOFF.md`](HANDOFF.md) |
+| **Adversarial audits (3, kept in full)** | [`docs/audits/`](docs/audits/) |
+
 ## One-liner
 
 **Waypoint is a hands-free dispatch copilot for delivery drivers that never
@@ -51,7 +62,7 @@ gate, plus turn-origin retirement. `src/waypoint/fencing.py`.
 ## Evidence, in one command
 
 ```bash
-pytest                                # 549 tests, ~20s, no credentials
+pytest                                # 573 tests, ~20s, no credentials
 python evidence/run_acceptance.py     # 6/6 scenarios, 36 checks, no credentials
 python evidence/mutation_test.py      # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py   # 19/19 more: wiring, gates, evidence
@@ -63,7 +74,7 @@ the central claim on their own machine without our keys.
 
 The third command is the one we would point a sceptical judge at first. It
 breaks the code fifteen different ways and checks that a test notices each time
-— because "549 tests pass" says nothing until you know the tests would fail.
+— because "573 tests pass" says nothing until you know the tests would fail.
 
 **Ten** real bugs were found and fixed this way. Eight came from two
 independent adversarial passes run *after* the project was declared finished.
@@ -71,7 +82,7 @@ The worst was not in the fence at all: **no script in the repository could make
 a single Rime API call**, in any configuration, with any credential — so the
 preflight gate that `DEMO_SCRIPT.md` requires before recording could never
 pass, and it blamed the API key for a code bug. The second worst: the wiring
-layer had no tests, and disabling barge-in entirely left all 549 tests, all six
+layer had no tests, and disabling barge-in entirely left all 573 tests, all six
 acceptance scenarios and the first mutation harness green.
 
 All ten are written up in `RIME_EVIDENCE.md` §3, with what the tests missed and
@@ -85,10 +96,16 @@ Full claim, procedure, results and limitations: **`RIME_EVIDENCE.md`**.
 
 | | |
 |---|---|
-| Repository | FILL: github URL |
-| Demo video | FILL: video URL (4:30, under the 5:00 cap) |
+| Repository | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
+| Demo video | `FILL: YouTube link` (4:30, under the 5:00 cap) |
+| CI, green on every push | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) |
+| Project explainer, one file | [`HANDOFF.md`](HANDOFF.md) |
 | Evidence | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
+| Acceptance run | [`evidence/reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
+| Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Threat model | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) |
+| Data provenance | [`docs/DATA.md`](docs/DATA.md) |
+| Adversarial audits (3, kept in full) | [`docs/audits/`](docs/audits/) |
 
 ## Team
 
@@ -112,7 +129,7 @@ installed package, not recalled. FILL: add anything else the team used.
 | **Problem and necessity of voice — 25%** | A driver legally cannot use a screen. `README.md` opening; Shot 1 of the demo. |
 | **Hard voice engineering — 25%** | `src/waypoint/fencing.py`, and the `_read`/`_write` integration in `agent.py`. `RIME_EVIDENCE.md` §6 states exactly what LiveKit already does, so the contribution is not overclaimed. |
 | **Rime integration and voice experience — 20%** | `build_tts()`; the WebSocket word-timestamp dependency; `pronounce.py` and the Coda/Mist trade-off; exact config table in `README.md`. |
-| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 549 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 34 targets, 34 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, and an archived adversarial audit with every finding mapped to its fix. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block** — the central claim is checkable without our keys. |
+| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 573 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 34 targets, 34 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, and an archived adversarial audit with every finding mapped to its fix. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block** — the central claim is checkable without our keys. |
 | **Demo clarity — 10%** | `DEMO_SCRIPT.md`; the browser fence board makes the withholding visible, which listening alone cannot. |
 
 ## Eligibility self-check
@@ -130,7 +147,7 @@ Every disqualifier in the brief, and where it is ruled out.
 
 - [ ] GitHub Actions `verify` is green on the submitted commit
 - [ ] `python scripts/preflight.py` exits 0 on the recording machine
-- [ ] `pytest` → 549 passed
+- [ ] `pytest` → 573 passed
 - [ ] `python evidence/run_acceptance.py` → 6/6
 - [ ] `python evidence/mutation_test.py` → 15/15 caught
 - [ ] `python evidence/mutation_test_ii.py` → 19/19 caught

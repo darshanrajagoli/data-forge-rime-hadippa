@@ -39,6 +39,8 @@ Ok team, project is built and on GitHub. Read this once, it's 2 minutes, then we
 
 *If you get stuck* (expected, don't burn 40 min on it): open ChatGPT or Gemini, upload `HANDOFF.md` + `team/WORKFLOW.md` + whatever file you're stuck on, and there's a ready-made prompt at the bottom of `WORKFLOW.md` under "When you are stuck" — just fill in the blanks and paste it. It tells the AI you're not a programmer and to go one step at a time.
 
+*One more thing for Arya:* when the video's up, the YouTube link needs to go into the Deliverables table at the top of `README.md` AND `SUBMISSION.md` — both currently say `FILL:`. You can edit those straight on the GitHub website (click file → pencil icon → Commit changes). If you'd rather not, just drop the link here and I'll do it — but say which.
+
 *Uploading your work:* you don't need git. Go to the GitHub link, click into the folder, `Add file` → `Upload files`, drag it in, `Commit changes`. That's it.
 
 Ping the group when you start and when you're done. If you're stuck, say so early — there are message templates at the bottom of `WORKFLOW.md`.

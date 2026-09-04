@@ -4,6 +4,29 @@
 
 **A hands-free dispatch copilot for delivery drivers, built on LiveKit Agents with Rime as the primary spoken output.**
 
+## Deliverables
+
+| | Link |
+|---|---|
+| **Demo video** (4:30) | `FILL: unlisted YouTube link` |
+| **Repository** | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
+| **CI — every claim below, re-run on hardware we do not control** | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) · Linux + Windows × Python 3.10/3.12 · **no secrets block** |
+| **Start here (whole project in one file)** | [`HANDOFF.md`](HANDOFF.md) |
+| **Evidence, claim by claim** | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
+| **The submission** | [`SUBMISSION.md`](SUBMISSION.md) |
+| **Acceptance run** (no credentials, one command) | [`evidence/reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
+| **Three adversarial audits, kept in full** | [`docs/audits/`](docs/audits/) |
+
+Reproduce the whole offline half on your own machine, with no keys of ours:
+
+```bash
+pip install -e ".[dev]"
+pytest                               # 573 passed
+python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
+python evidence/mutation_test.py     # 15/15 deliberate bugs caught
+python evidence/mutation_test_ii.py  # 19/19 more
+```
+
 The driver has both hands on the wheel and their eyes on the road. They cannot
 look at a screen — in most jurisdictions they legally must not — and they will
 not ask twice. Removing speech from this product does not degrade it; it
@@ -93,7 +116,7 @@ git clone <this repo> && cd waypoint
 python -m venv .venv && . .venv/Scripts/activate   # Linux/macOS: . .venv/bin/activate
 pip install -e ".[dev]"
 
-pytest                                  # 549 tests, ~20s, no network
+pytest                                  # 573 tests, ~20s, no network
 python evidence/run_acceptance.py        # the 6 acceptance scenarios
 ```
 
@@ -268,7 +291,7 @@ ignored every marker still could not commit a stale write, because
 | What | Command | Needs a key? | Output |
 |---|---|---|---|
 | The six acceptance scenarios | `python evidence/run_acceptance.py` | no | [`reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Test suite | `pytest` | no | 549 passing |
+| Test suite | `pytest` | no | 573 passing |
 | Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | `results/latency.md` |
 | Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | `results/pronunciation/` |
 | Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | yes | `results/heard_accuracy.md` |
@@ -279,7 +302,7 @@ The full claim, acceptance test, procedure and limitations are in
 
 ### The tests are checked too
 
-`pytest` reporting 549 passes is not evidence on its own — a suite that stays
+`pytest` reporting 573 passes is not evidence on its own — a suite that stays
 green when you break the code it guards converts absence of signal into
 confidence. So there are two mutation harnesses, and between them 28 targets:
 
@@ -297,7 +320,7 @@ The second harness exists because the first one had a shape. All fifteen of its
 targets land in code a unit test calls directly, and **9 of the first 12
 mutations written against the wiring layer survived** — including
 `interruption {"enabled": False}`, which disables the only feature this product
-has. All 549 tests, all six acceptance scenarios and the first harness's 15/15
+has. All 573 tests, all six acceptance scenarios and the first harness's 15/15
 stayed green with barge-in switched off. `tests/test_wiring.py` and
 `tests/test_preflight.py` were written to close that, and did.
 

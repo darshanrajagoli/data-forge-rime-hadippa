@@ -94,7 +94,7 @@ Full output, regenerated on every run:
 ### Test suite
 
 ```bash
-pytest        # 549 passed in ~6s
+pytest        # 573 passed in ~6s
 ```
 
 | File | Tests | Covers |
@@ -255,7 +255,7 @@ installed code rather than recalled:
 
 ### Do the tests mean anything? Mutation testing
 
-"549 tests pass" is not evidence. A suite that stays green when you break the
+"573 tests pass" is not evidence. A suite that stays green when you break the
 code it guards is worse than no suite, because it converts absence of signal
 into confidence. So the claim is checked directly:
 

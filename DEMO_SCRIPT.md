@@ -15,7 +15,7 @@ Run these and do not proceed until all three are clean.
 
 ```bash
 python scripts/preflight.py          # must exit 0
-pytest                               # 549 passed
+pytest                               # 573 passed
 python evidence/run_acceptance.py    # 6/6 scenarios
 ```
 
@@ -179,7 +179,7 @@ Let it scroll. Land on `6/6 scenarios passed (36 checks)`.
 pytest -q
 ```
 
-> "Five hundred and forty-nine tests. A hundred and twelve of them are on the fence
+> "Five hundred and seventy-three tests. A hundred and twelve of them are on the fence
 > alone, and seventy of those are seeded fuzz runs — two hundred random
 > orderings of issue, interrupt, resolve, cancel, checking after *every single
 > operation* that nothing leaked and nothing stale got through."
