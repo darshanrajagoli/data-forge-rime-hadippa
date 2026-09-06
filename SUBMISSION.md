@@ -13,51 +13,29 @@
 
 ## One-liner
 
-**Waypoint is a hands-free dispatch copilot for delivery drivers that never
-speaks a stale answer.**
+**Waypoint is a hands-free dispatch copilot for delivery drivers that never speaks a stale answer.**
 
 ## The user and the problem
 
-A delivery driver mid-route. Both hands on the wheel, eyes on the road, and in
-most jurisdictions legally barred from touching a screen. Remove speech and
-there is no product left.
+A delivery driver mid-route. Both hands on the wheel, eyes on the road, and in most jurisdictions legally barred from touching a screen. Remove speech and there is no product left.
 
-But a driver interrupts constantly — that is what talking while operating a
-vehicle looks like. And a voice agent that can be interrupted can finish a
-sentence that is no longer true: reading out a gate code for a stop the driver
-abandoned two seconds ago, or closing a delivery they just cancelled.
+But a driver interrupts constantly — that is what talking while operating a vehicle looks like. And a voice agent that can be interrupted can finish a sentence that is no longer true: reading out a gate code for a stop the driver abandoned two seconds ago, or closing a delivery they just cancelled.
 
 ## The hard voice problem we chose
 
-**Barge-in and recovery during in-flight tool work**, taken to the level that
-actually matters:
+**Barge-in and recovery during in-flight tool work**, taken to the level that actually matters:
 
-1. A superseded tool result is never spoken — *and never becomes a value the
-   model can state on a later turn*.
-2. An irreversible write never commits after the turn that requested it was
-   interrupted. Checked at the **effect boundary**, because cancellation cannot
-   help: by the time `CancelledError` arrives the POST returned 200.
-3. The transcript records the words that actually left the speaker, using
-   Rime's word-level timestamps — so the agent never believes it gave the
-   driver a gate code it was cut off mid-way through.
+1. A superseded tool result is never spoken — *and never becomes a value the model can state on a later turn*.
+2. An irreversible write never commits after the turn that requested it was interrupted. Checked at the **effect boundary**, because cancellation cannot help: by the time `CancelledError` arrives the POST returned 200.
+3. The transcript records the words that actually left the speaker, using Rime's word-level timestamps — so the agent never believes it gave the driver a gate code it was cut off mid-way through.
 
-Mechanism: a **turn fence** — a monotonic generation counter with one admission
-gate, plus turn-origin retirement. `src/waypoint/fencing.py`.
+Mechanism: a **turn fence** — a monotonic generation counter with one admission gate, plus turn-origin retirement. `src/waypoint/fencing.py`.
 
 ## Why Rime is central
 
-- Rime is the **only** speech provider. No fallback TTS. If Rime is
-  unreachable the session errors visibly rather than quietly substituting
-  another voice.
-- Rime's **WebSocket word timestamps** are what make claim 3 exact rather than
-  estimated. Turning that transport off degrades the feature and the startup
-  banner says so.
-- Rime's model capabilities shaped a real product decision: `coda` ignores
-  `phonemize_between_brackets` and `pause_between_brackets`, which are
-  mistv2-only. Since street-name pronunciation is a correctness requirement for
-  a driver ("Gow Street" is not on their route), we built a model-portable
-  respelling layer and made asking for phonemes on `coda` **fail at startup**
-  instead of silently no-opping.
+- Rime is the **only** speech provider. No fallback TTS. If Rime is unreachable the session errors visibly rather than quietly substituting another voice.
+- Rime's **WebSocket word timestamps** are what make claim 3 exact rather than estimated. Turning that transport off degrades the feature and the startup banner says so.
+- Rime's model capabilities shaped a real product decision: `coda` ignores `phonemize_between_brackets` and `pause_between_brackets`, which are mistv2-only. Since street-name pronunciation is a correctness requirement for a driver ("Gow Street" is not on their route), we built a model-portable respelling layer and made asking for phonemes on `coda` **fail at startup** instead of silently no-opping.
 
 ## Evidence, in one command
 
@@ -66,94 +44,3 @@ pytest                                # 573 tests, ~20s, no credentials
 python evidence/run_acceptance.py     # 6/6 scenarios, 36 checks, no credentials
 python evidence/mutation_test.py      # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py   # 19/19 more: wiring, gates, evidence
-```
-
-The acceptance test was written before the demo. It drives the real agent code
-against the real fence and injects the barge-ins itself, so a judge can verify
-the central claim on their own machine without our keys.
-
-The third command is the one we would point a sceptical judge at first. It
-breaks the code fifteen different ways and checks that a test notices each time
-— because "573 tests pass" says nothing until you know the tests would fail.
-
-**Ten** real bugs were found and fixed this way. Eight came from two
-independent adversarial passes run *after* the project was declared finished.
-The worst was not in the fence at all: **no script in the repository could make
-a single Rime API call**, in any configuration, with any credential — so the
-preflight gate that `DEMO_SCRIPT.md` requires before recording could never
-pass, and it blamed the API key for a code bug. The second worst: the wiring
-layer had no tests, and disabling barge-in entirely left all 573 tests, all six
-acceptance scenarios and the first mutation harness green.
-
-All ten are written up in `RIME_EVIDENCE.md` §3, with what the tests missed and
-why. The review that found the last five is archived verbatim at
-[`docs/audits/AUDIT-2.md`](docs/audits/AUDIT-2.md), with a table mapping each
-finding to its fix.
-
-Full claim, procedure, results and limitations: **`RIME_EVIDENCE.md`**.
-
-## Links
-
-| | |
-|---|---|
-| Repository | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
-| Demo video | `FILL: YouTube link` (4:30, under the 5:00 cap) |
-| CI, green on every push | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) |
-| Project explainer, one file | [`HANDOFF.md`](HANDOFF.md) |
-| Evidence | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
-| Acceptance run | [`evidence/reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| Threat model | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) |
-| Data provenance | [`docs/DATA.md`](docs/DATA.md) |
-| Adversarial audits (3, kept in full) | [`docs/audits/`](docs/audits/) |
-
-## Team
-
-FILL: names, and who did what. Disclose any mentor involvement.
-
-## AI assistance
-
-Built with AI assistance (Claude) for code, tests and documentation. The
-turn-fence design, the Coda/Mist trade-off and the measurement-boundary
-discipline came from reading primary sources — the LiveKit Agents 1.7.1 source
-for interruption handling, Rime's docs for model capabilities. The
-`agent_activity.py` behaviour quoted in `RIME_EVIDENCE.md` §6 was read from the
-installed package, not recalled. FILL: add anything else the team used.
-
----
-
-## How this maps to the judging criteria
-
-| Criterion | Where to look |
-|---|---|
-| **Problem and necessity of voice — 25%** | A driver legally cannot use a screen. `README.md` opening; Shot 1 of the demo. |
-| **Hard voice engineering — 25%** | `src/waypoint/fencing.py`, and the `_read`/`_write` integration in `agent.py`. `RIME_EVIDENCE.md` §6 states exactly what LiveKit already does, so the contribution is not overclaimed. |
-| **Rime integration and voice experience — 20%** | `build_tts()`; the WebSocket word-timestamp dependency; `pronounce.py` and the Coda/Mist trade-off; exact config table in `README.md`. |
-| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 573 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 34 targets, 34 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, and an archived adversarial audit with every finding mapped to its fix. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block** — the central claim is checkable without our keys. |
-| **Demo clarity — 10%** | `DEMO_SCRIPT.md`; the browser fence board makes the withholding visible, which listening alone cannot. |
-
-## Eligibility self-check
-
-Every disqualifier in the brief, and where it is ruled out.
-
-- [x] **Verifiable Rime integration in the submitted code** — `build_tts()` in `src/waypoint/agent.py`; `livekit-plugins-rime==1.7.1` pinned in `pyproject.toml`.
-- [x] **Rime is not incidental** — it is the only speech provider, and its word timestamps are a functional dependency of a core feature, not decoration.
-- [x] **A working product path, not static screens** — `python -m waypoint.agent console` runs the whole loop with no browser.
-- [ ] **Demo included** — FILL after upload.
-- [x] **No live credential exposed** — `.env.example` holds placeholders only; `scripts/secret_scan.py` (40 tests) runs standalone, in preflight and in a pre-commit hook; the browser never receives a key.
-- [ ] **Model / voice / language passes the event preflight** — `python scripts/preflight.py` must exit 0 on the machine that records the demo. FILL: date run and result.
-
-## Pre-submit checklist
-
-- [ ] GitHub Actions `verify` is green on the submitted commit
-- [ ] `python scripts/preflight.py` exits 0 on the recording machine
-- [ ] `pytest` → 573 passed
-- [ ] `python evidence/run_acceptance.py` → 6/6
-- [ ] `python evidence/mutation_test.py` → 15/15 caught
-- [ ] `python evidence/mutation_test_ii.py` → 19/19 caught
-- [ ] `python scripts/secret_scan.py` → clean
-- [ ] `git log -p | grep -i "api.key\|secret"` shows nothing real
-- [ ] Demo is under 5:00 and shows all seven required elements (`DEMO_SCRIPT.md`)
-- [ ] Repo is public and clones clean on a machine that never had the project
-- [ ] `evidence/results/` contains the committed artifacts
-- [ ] Every `FILL:` above is replaced
