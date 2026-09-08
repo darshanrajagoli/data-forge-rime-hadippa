@@ -416,3 +416,108 @@ def test_this_repository_is_clean() -> None:
     """
     findings = run_all(ROOT)
     assert not findings, "\n" + "\n".join(str(f) for f in findings)
+
+
+# ------------------------------------------------- the check-docs pragma
+
+
+def test_a_pragma_on_the_line_above_excuses_a_stale_number(tmp_path: Path) -> None:
+    """The real case: the demo video narration says a number that has moved on.
+
+    The video was filmed at 573 tests and says so out loud. Explaining that is
+    more honest than deleting the sentence or exempting the whole file.
+    """
+    write(
+        tmp_path,
+        "DEMO_SCRIPT.md",
+        """
+        <!-- check-docs: allow -- the recorded narration really does say 573 -->
+        > It was filmed with a suite of 573 tests.
+        """,
+    )
+    assert check_test_count(tmp_path, actual=609) == []
+
+
+def test_a_pragma_on_the_same_line_also_works(tmp_path: Path) -> None:
+    write(tmp_path, "README.md", "573 tests <!-- check-docs: allow -- historical -->")
+    assert check_test_count(tmp_path, actual=609) == []
+
+
+def test_the_pragma_does_not_reach_the_line_after_next(tmp_path: Path) -> None:
+    """The hole must stay exactly two lines wide.
+
+    A marker that covered a whole block would let a genuine defect drift in
+    underneath an excuse written months earlier for something else.
+    """
+    write(
+        tmp_path,
+        "README.md",
+        """
+        <!-- check-docs: allow -- excuses the next line only -->
+        573 tests, deliberately historical
+        480 tests, nobody excused this one
+        """,
+    )
+    found = check_test_count(tmp_path, actual=609)
+    assert len(found) == 1
+    assert "480" in details(found)
+
+
+def test_the_pragma_does_not_leak_to_other_files(tmp_path: Path) -> None:
+    write(tmp_path, "DEMO_SCRIPT.md", "<!-- check-docs: allow -->\n573 tests")
+    write(tmp_path, "README.md", "573 tests")
+    found = check_test_count(tmp_path, actual=609)
+    assert [f.path for f in found] == ["README.md"]
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ["check-docs: allow", "check_docs: allow", "CHECK-DOCS: IGNORE", "checkdocs:allow"],
+)
+def test_pragma_spellings(tmp_path: Path, marker: str) -> None:
+    """Matches the tolerance of secret_scan.py's pragma, for one convention."""
+    write(tmp_path, "README.md", f"<!-- {marker} -->\n573 tests")
+    assert check_test_count(tmp_path, actual=609) == []
+
+
+def test_an_unexcused_line_in_a_file_that_uses_a_pragma_is_still_checked(
+    tmp_path: Path,
+) -> None:
+    """Using the hatch once does not switch the file off."""
+    write(
+        tmp_path,
+        "README.md",
+        """
+        <!-- check-docs: allow -->
+        573 tests, excused
+
+        some prose
+
+        [broken](nope.md)
+        """,
+    )
+    assert checks(check_links(tmp_path)) == ["links"]
+
+
+def test_the_pragma_suppresses_every_check_on_its_line(tmp_path: Path) -> None:
+    """It is a line-level hatch, not a per-check one -- so it needs a reason."""
+    write(tmp_path, "README.md", "<!-- check-docs: allow -->\n[gone](missing.md)")
+    assert check_links(tmp_path) == []
+
+
+def test_a_pragma_cannot_hide_a_placeholder_in_a_shipped_doc_by_accident(
+    tmp_path: Path,
+) -> None:
+    """Only the two covered lines are excused; the rest of the doc is not."""
+    write(
+        tmp_path,
+        "README.md",
+        """
+        <!-- check-docs: allow -->
+        `FILL: excused on purpose`
+        `FILL: this one is a real defect`
+        """,
+    )
+    found = check_placeholders(tmp_path)
+    assert len(found) == 1
+    assert "real defect" in details(found)

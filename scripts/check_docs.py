@@ -41,6 +41,17 @@ Subset counts must be written as ``N of the M`` rather than a bare ``N tests``.
 That is a documentation convention with a purpose: it makes the denominator
 checkable on every line that quotes a fraction of the suite, and it leaves a
 bare count unambiguously meaning the total.
+
+**Known blind spots**, stated because a gate nobody knows the limits of is
+worse than a smaller one:
+
+* Counts spelled out in words are not checked. ``DEMO_SCRIPT.md`` narrates
+  "six hundred and twenty tests" out loud, and this file would not notice if
+  that drifted -- it was caught by hand once already.
+* Anchors are not resolved. ``FILE.md#section`` is verified as far as
+  ``FILE.md`` existing; a dead ``#section`` passes.
+* External links are never fetched, so a dead URL passes.
+* The pragma below suppresses every check on the line it covers.
 """
 
 from __future__ import annotations
@@ -88,6 +99,25 @@ PLACEHOLDER_EXEMPT_FILES = ("VERIFICATION.md",)
 #: Tokens that mean "somebody meant to come back to this".
 PLACEHOLDER_TOKENS = ("FILL:", "REPLACE-ME", "<this repo>", "TKTK", "XXX")
 
+#: Inline escape hatch, mirroring ``secret_scan.py``'s ``secret-scan: allow``.
+#:
+#: A document sometimes needs to quote a number that is deliberately no longer
+#: true. The demo video was recorded when the suite was 573 tests and says so
+#: out loud; the honest fix is to explain the discrepancy, not to pretend the
+#: narration said something else. Without a pragma the only ways to say that
+#: are to exempt the whole file or to delete the sentence, and both are worse.
+#:
+#: In markdown, write it as an HTML comment on the line above, where it is
+#: invisible when rendered:
+#:
+#:     <!-- check-docs: allow -- the recorded video really does say 573 -->
+#:     > "Five hundred and seventy-three tests..."
+#:
+#: Like the secret scanner's pragma it covers the line it is on and the line
+#: after, so it can sit above the text it excuses rather than cluttering it.
+#: It suppresses every check on that line, so it should carry a reason.
+PRAGMA = re.compile(r"check[-_ ]?docs:\s*(allow|ignore)", re.IGNORECASE)
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -122,6 +152,21 @@ def _rel(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
+def _exempt_lines(text: str) -> set[int]:
+    """1-indexed line numbers covered by a ``check-docs: allow`` pragma.
+
+    The pragma covers its own line and the next one, so it can sit above the
+    sentence it excuses. Deliberately not wider: a marker that covered a whole
+    block would let a real defect drift in underneath an old excuse.
+    """
+    covered: set[int] = set()
+    for i, line in enumerate(text.splitlines(), start=1):
+        if PRAGMA.search(line):
+            covered.add(i)
+            covered.add(i + 1)
+    return covered
+
+
 # --------------------------------------------------------------------------
 # links
 # --------------------------------------------------------------------------
@@ -149,8 +194,12 @@ def check_links(root: Path) -> list[Finding]:
     """Every local markdown link points at something that exists."""
     findings: list[Finding] = []
     for f in _markdown_files(root):
-        text = _strip_code(f.read_text(encoding="utf-8"))
+        raw = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(raw)
+        text = _strip_code(raw)
         for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                continue
             for m in _LINK.finditer(line):
                 target = m.group(1).strip()
                 if target.startswith(("http://", "https://", "mailto:", "#", "<")):
@@ -187,9 +236,11 @@ def check_placeholders(root: Path) -> list[Finding]:
         rel = _rel(root, f)
         if not _placeholder_checked(rel):
             continue
-        for i, line in enumerate(
-            f.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        text = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(text)
+        for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                continue
             for token in PLACEHOLDER_TOKENS:
                 if token in line:
                     findings.append(
@@ -238,9 +289,11 @@ def check_mutation_counts(root: Path) -> list[Finding]:
         rel = _rel(root, f)
         if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES) or rel in PLACEHOLDER_EXEMPT_FILES:
             continue
-        for i, line in enumerate(
-            f.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        text = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(text)
+        for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                continue
             for m in _TARGETS.finditer(line):
                 claimed = int(m.group(1))
                 if claimed not in valid:
@@ -278,9 +331,11 @@ def check_clone_dir(root: Path) -> list[Finding]:
         rel = _rel(root, f)
         if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES) or rel in PLACEHOLDER_EXEMPT_FILES:
             continue
-        lines = f.read_text(encoding="utf-8").splitlines()
+        raw = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(raw)
+        lines = raw.splitlines()
         for i, line in enumerate(lines, start=1):
-            if "git clone" not in line:
+            if i in exempt or "git clone" not in line:
                 continue
             # The cd may be on the same line (`git clone X && cd Y`) or on one
             # of the next few, allowing for a blank line between them.
@@ -367,9 +422,11 @@ def check_test_count(root: Path, actual: int) -> list[Finding]:
         rel = _rel(root, f)
         if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES) or rel in PLACEHOLDER_EXEMPT_FILES:
             continue
-        for i, line in enumerate(
-            f.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        text = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(text)
+        for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                continue
             subsets = list(_TEST_SUBSET.finditer(line))
             for m in subsets:
                 part, whole = int(m.group(1)), int(m.group(2))
@@ -452,7 +509,11 @@ def check_per_file_tests(root: Path, actual: dict[str, int]) -> list[Finding]:
         if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES) or rel in PLACEHOLDER_EXEMPT_FILES:
             continue
         text = f.read_text(encoding="utf-8")
-        rows = list(_TABLE_ROW.finditer(text))
+        exempt = _exempt_lines(text)
+        rows = [
+            m for m in _TABLE_ROW.finditer(text)
+            if (text.count("\n", 0, m.start()) + 1) not in exempt
+        ]
         if not rows:
             continue
 
