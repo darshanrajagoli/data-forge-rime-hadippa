@@ -21,7 +21,7 @@ Reproduce the whole offline half on your own machine, with no keys of ours:
 
 ```bash
 pip install -e ".[dev]"
-pytest                               # 620 passed
+pytest                               # 626 passed
 python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
 python evidence/mutation_test.py     # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py  # 19/19 more
@@ -122,7 +122,7 @@ python -m venv .venv
 
 pip install -e ".[dev]"
 
-pytest                                  # 620 tests, ~25s, no network
+pytest                                  # 626 tests, ~25s, no network
 python evidence/run_acceptance.py        # the 6 acceptance scenarios
 ```
 
@@ -276,7 +276,7 @@ does not need. Saying so is better than shipping a script that fails.
 
 | Module | Role |
 |---|---|
-| [`fencing.py`](src/waypoint/fencing.py) | The turn fence. Pure, no dependencies, 112 of the 620 tests. |
+| [`fencing.py`](src/waypoint/fencing.py) | The turn fence. Pure, no dependencies, 112 of the 626 tests. |
 | [`heard.py`](src/waypoint/heard.py) | Heard-not-said reconciliation from Rime word timestamps. |
 | [`pronounce.py`](src/waypoint/pronounce.py) | Lexicon, number-for-the-ear, model-compatibility gate. |
 | [`agent.py`](src/waypoint/agent.py) | LiveKit wiring. `_read` / `_write` are the fence integration. |
@@ -297,7 +297,7 @@ ignored every marker still could not commit a stale write, because
 | What | Command | Needs a key? | Output |
 |---|---|---|---|
 | The six acceptance scenarios | `python evidence/run_acceptance.py` | no | [`reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Test suite | `pytest` | no | 620 passing |
+| Test suite | `pytest` | no | 626 passing |
 | The docs still match the repository | `python scripts/check_docs.py` | no | 6 checks |
 | Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | **run 2026-09-07** — [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) |
 | Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | **run 2026-09-07** — [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md) |
@@ -316,7 +316,7 @@ The full claim, acceptance test, procedure and limitations are in
 
 ### The tests are checked too
 
-`pytest` reporting 620 passes is not evidence on its own — a suite that stays
+`pytest` reporting 626 passes is not evidence on its own — a suite that stays
 green when you break the code it guards converts absence of signal into
 confidence. So there are two mutation harnesses, and between them 34 targets:
 
@@ -334,7 +334,7 @@ The second harness exists because the first one had a shape. All fifteen of its
 targets land in code a unit test calls directly, and **9 of the first 12
 mutations written against the wiring layer survived** — including
 `interruption {"enabled": False}`, which disables the only feature this product
-has. All 620 tests, all six acceptance scenarios and the first harness's 15/15
+has. All 626 tests, all six acceptance scenarios and the first harness's 15/15
 stayed green with barge-in switched off. `tests/test_wiring.py` and
 `tests/test_preflight.py` were written to close that, and did.
 

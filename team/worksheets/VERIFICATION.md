@@ -19,7 +19,7 @@
 |---|---|---|---|
 | Clone | `git clone <repo>` | TODO | TODO |
 | Install | `pip install -e ".[dev]"` | TODO | TODO |
-| Test suite | `pytest` | TODO (expect: 620 passed) | TODO |
+| Test suite | `pytest` | TODO (expect: 626 passed) | TODO |
 | Acceptance | `python evidence/run_acceptance.py` | TODO (expect: 6/6, 36 checks) | TODO |
 | Mutation test (core) | `python evidence/mutation_test.py` | TODO (expect: 15/15) | TODO |
 | Mutation test (wiring) | `python evidence/mutation_test_ii.py` | TODO (expect: 19/19) | TODO |

@@ -15,7 +15,7 @@ Run these and do not proceed until all three are clean.
 
 ```bash
 python scripts/preflight.py          # must exit 0
-pytest                               # 620 passed
+pytest                               # 626 passed
 python evidence/run_acceptance.py    # 6/6 scenarios
 ```
 
@@ -179,7 +179,7 @@ Let it scroll. Land on `6/6 scenarios passed (36 checks)`.
 pytest -q
 ```
 
-> "Six hundred and twenty tests. A hundred and twelve of them are on the fence
+> "Six hundred and twenty-six tests. A hundred and twelve of them are on the fence
 > alone, and seventy of those are seeded fuzz runs — two hundred random
 > orderings of issue, interrupt, resolve, cancel, checking after *every single
 > operation* that nothing leaked and nothing stale got through."
@@ -187,7 +187,7 @@ pytest -q
 <!-- check-docs: allow -- the recorded narration really does say 573 -->
 > **Note on the recorded video.** It was filmed with a suite of 573 tests.
 > The narration therefore says "five hundred and seventy-three", and the
-> repository says 620. `tests/test_check_docs.py` added 36 tests afterwards, guarding
+> repository says 626. `tests/test_check_docs.py` added 36 tests afterwards, guarding
 > the documentation against the drift that a fresh-clone verification had just
 > found. The video is not re-cut for this. Both numbers are real, and the
 > 112-on-the-fence figure the narration quotes is unchanged.

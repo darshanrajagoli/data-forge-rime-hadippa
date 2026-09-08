@@ -180,10 +180,17 @@ def test_reports_and_worksheets_may_quote_placeholders(
     assert check_placeholders(tmp_path) == []
 
 
-def test_a_doc_nobody_ships_is_not_placeholder_checked(tmp_path: Path) -> None:
-    """Only the documents on the shipped list are held to this standard."""
+def test_an_unlisted_root_document_is_checked_too(tmp_path: Path) -> None:
+    """This test used to assert the opposite, and the opposite was a hole.
+
+    While the check required membership in a ``SHIPPED_DOCS`` allowlist, a
+    scratch file was unchecked -- and so was any real document added after the
+    list was written. Running RED-TEAM-PROMPT-4 against this module surfaced
+    it: the gate failed open. It fails closed now, and an exemption has to be
+    written down deliberately.
+    """
     write(tmp_path, "SCRATCH.md", "`FILL: something`")
-    assert check_placeholders(tmp_path) == []
+    assert checks(check_placeholders(tmp_path)) == ["placeholders"]
 
 
 # ------------------------------------------------------ mutation_counts
@@ -521,3 +528,91 @@ def test_a_pragma_cannot_hide_a_placeholder_in_a_shipped_doc_by_accident(
     found = check_placeholders(tmp_path)
     assert len(found) == 1
     assert "real defect" in details(found)
+
+
+# ------------------------------- holes found by running RED-TEAM-PROMPT-4
+
+
+def test_a_document_added_later_is_placeholder_checked_by_default(
+    tmp_path: Path,
+) -> None:
+    """The gate fails closed.
+
+    It used to require membership in a SHIPPED_DOCS allowlist. A judge-facing
+    document written after that list was drawn up -- a PITCH.md, a
+    ONE-PAGER.md -- was therefore unchecked, and would have shipped with its
+    blanks intact. That is the exact defect this module exists to prevent,
+    walking back in through a file nobody remembered to enumerate.
+    """
+    write(tmp_path, "PITCH.md", "| Demo | `FILL: link goes here` |")
+    found = check_placeholders(tmp_path)
+    assert checks(found) == ["placeholders"]
+    assert "PITCH.md" == found[0].path
+
+
+def test_a_new_doc_under_docs_is_also_checked(tmp_path: Path) -> None:
+    write(tmp_path, "docs/ONE-PAGER.md", "`FILL: the number`")
+    assert checks(check_placeholders(tmp_path)) == ["placeholders"]
+
+
+def test_the_exemptions_still_hold_after_inverting(tmp_path: Path) -> None:
+    """Failing closed must not start firing on the reports that quote defects."""
+    write(tmp_path, "docs/audits/AUDIT-9.md", "it still said `REPLACE-ME`")
+    write(tmp_path, "VERIFICATION.md", "the table read `FILL: link`")
+    write(tmp_path, "team/NOTES.md", "`FILL: measure this`")
+    assert check_placeholders(tmp_path) == []
+
+
+def test_a_breakdown_missing_two_files_is_still_a_finding(tmp_path: Path) -> None:
+    """The completeness threshold used to allow exactly this.
+
+    "Missing at most one" left a table omitting two files unchecked. The real
+    defect omitted one file while two other rows were hundreds out, so a second
+    omission was well within reach.
+    """
+    write(
+        tmp_path,
+        "RIME_EVIDENCE.md",
+        """
+        | File | Tests | Covers |
+        |---|---|---|
+        | `test_a.py` | 10 | a |
+        | `test_b.py` | 10 | b |
+        | `test_c.py` | 10 | c |
+        """,
+    )
+    actual = {"test_a.py": 10, "test_b.py": 10, "test_c.py": 10,
+              "test_d.py": 10, "test_e.py": 10}
+    omissions = [f for f in check_per_file_tests(tmp_path, actual) if "omits" in f.detail]
+    assert len(omissions) == 2
+    assert "test_d.py" in details(omissions)
+    assert "test_e.py" in details(omissions)
+
+
+def test_a_two_row_illustration_is_still_not_forced_to_be_complete(
+    tmp_path: Path,
+) -> None:
+    """The other half of the trade-off: below half the suite it reads as a sample."""
+    write(
+        tmp_path,
+        "RIME_EVIDENCE.md",
+        """
+        | File | Tests | Covers |
+        |---|---|---|
+        | `test_a.py` | 10 | a |
+        """,
+    )
+    actual = {f"test_{c}.py": 10 for c in "abcdefgh"}
+    assert [f for f in check_per_file_tests(tmp_path, actual) if "omits" in f.detail] == []
+
+
+def test_a_failed_collection_is_still_reported_loudly_somewhere(
+    tmp_path: Path,
+) -> None:
+    """per_file_tests goes quiet on an empty collection; test_count must not.
+
+    Otherwise a broken collection would look like a clean run.
+    """
+    write(tmp_path, "README.md", "620 tests")
+    assert check_per_file_tests(tmp_path, {}) == []
+    assert checks(check_test_count(tmp_path, actual=0)) == ["test_count"]

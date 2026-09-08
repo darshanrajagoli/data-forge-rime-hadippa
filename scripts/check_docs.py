@@ -71,19 +71,6 @@ ROOT = Path(__file__).resolve().parent.parent
 #: name, so any documented ``cd`` after a ``git clone`` has to agree with it.
 REPO_NAME = "data-forge-rime-hadippa"
 
-#: Documents a judge is expected to read. These must be free of placeholders.
-SHIPPED_DOCS = (
-    "README.md",
-    "SUBMISSION.md",
-    "RIME_EVIDENCE.md",
-    "HANDOFF.md",
-    "DEMO_SCRIPT.md",
-    "docs/ARCHITECTURE.md",
-    "docs/DATA.md",
-    "docs/LISTENING_TEST.md",
-    "docs/THREAT_MODEL.md",
-)
-
 #: Exempt from the placeholder check, deliberately.
 #:
 #: ``docs/audits/`` and ``VERIFICATION.md`` are adversarial reports whose whole
@@ -222,11 +209,23 @@ def check_links(root: Path) -> list[Finding]:
 
 
 def _placeholder_checked(rel: str) -> bool:
+    """Fail closed: a document is checked unless it is *explicitly* excused.
+
+    This used to require membership in a ``SHIPPED_DOCS`` allowlist, which is
+    the wrong direction for a gate: a judge-facing document added tomorrow
+    would not be on the list, so it would ship with its ``FILL:`` blanks intact
+    and nothing would say so. The defect this whole file exists to prevent
+    would have walked straight back in through a new file.
+
+    Inverting it changes nothing today -- the allowlist happened to name every
+    root-level and ``docs/`` markdown file except the exempt ones -- and closes
+    that door for every file added later.
+    """
     if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES):
         return False
     if rel in PLACEHOLDER_EXEMPT_FILES:
         return False
-    return rel in SHIPPED_DOCS
+    return True
 
 
 def check_placeholders(root: Path) -> list[Finding]:
@@ -543,9 +542,15 @@ def check_per_file_tests(root: Path, actual: dict[str, int]) -> list[Finding]:
                 )
 
         # A breakdown that silently omits a file understates the suite. Only
-        # enforced on tables that already look complete, so a doc quoting two
-        # rows as an example is not forced to list all twelve.
-        if len(listed) >= len(actual) - 1:
+        # enforced on tables that are evidently meant as an inventory, so a doc
+        # quoting two rows as an example is not forced to list all thirteen.
+        #
+        # The threshold was "missing at most one", which left a table missing
+        # *two* files unchecked -- and the real defect omitted one file while
+        # two other rows were hundreds out, so a second omission was well
+        # within reach. Half the suite is the signal that a table is trying to
+        # be exhaustive; below that it reads as illustrative.
+        if len(listed) * 2 >= len(actual):
             for missing in sorted(set(actual) - listed):
                 findings.append(
                     Finding(

@@ -243,7 +243,7 @@ web/
   server.py       Serves the browser console and mints LiveKit JWTs.
   console.html    The demo UI: fence board, heard-not-said panel, latency panel.
 
-tests/            620 tests.
+tests/            626 tests.
 docs/             Architecture, threat model, data, listening-test method, audits.
 team/             Internal. Workflow and worksheets. Not for judges.
 ```
@@ -268,7 +268,7 @@ pip install -e ".[dev]"
 ### The offline half — works on any laptop, no API keys at all
 
 ```bash
-pytest                               # 620 tests, ~25s
+pytest                               # 626 tests, ~25s
 python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
 python evidence/mutation_test.py     # 15/15 deliberate bugs caught  (~6 min)
 python evidence/mutation_test_ii.py  # 19/19 more                    (~4 min)
@@ -307,7 +307,7 @@ python -m waypoint.agent dev    # terminal 2
 This section is the honest inventory. It matters more than it looks, because
 the brief gives 20% to evidence and gives no credit for unverified claims.
 
-**620 tests.** 112 of them are on the fence alone, and 70 of those are seeded
+**626 tests.** 112 of them are on the fence alone, and 70 of those are seeded
 fuzz runs — random orderings of issue / interrupt / resolve / cancel, checking
 after *every single operation* that nothing stale got through. The safety
 assertion is computed independently of the code under test, so it cannot agree
@@ -320,7 +320,7 @@ against the backend's mutation log. A3 proves the in-flight write case is
 reported honestly rather than hidden.
 
 **Two mutation harnesses, 34 targets, 34 caught.** This is the part worth
-understanding. "620 tests pass" is not evidence — a suite that stays green when
+understanding. "626 tests pass" is not evidence — a suite that stays green when
 you break the thing it guards is worse than no suite. So both harnesses
 deliberately break the code (make the fence admit stale results, skip the check
 before an irreversible write, disable barge-in entirely, read gate codes as

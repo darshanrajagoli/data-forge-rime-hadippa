@@ -92,7 +92,7 @@ box-ticking exercise, and it is worth saying out loud in the demo.
 
 This is where most hackathon projects lose points, and where we are strongest.
 
-- **620 automated tests.**
+- **626 automated tests.**
 - **Six "acceptance scenarios"** — one command, no API keys needed, that runs
   the whole interruption scenario and checks 36 separate things about it.
 - **34 "mutation tests."** This one is the good one. We deliberately *break the
