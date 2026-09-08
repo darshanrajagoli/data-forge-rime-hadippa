@@ -504,7 +504,13 @@ adversarially tested should be able to show the adversary's report.
   AUDIT-2 had prompted, including a credential scanner blind to a key sharing a
   line with an error-class name.
 - [`RED-TEAM-PROMPT-3.md`](docs/audits/RED-TEAM-PROMPT-3.md) — the prompt used
-  for the third pass, if you want to run a fourth.
+  for the third pass.
+- [`RED-TEAM-PROMPT-4.md`](docs/audits/RED-TEAM-PROMPT-4.md) — written but not
+  yet run. It aims a fourth pass at the region none of the first three could
+  have covered: the evidence-integrity layer added after audit 3, including
+  `scripts/check_docs.py` itself. Run it cold if you want to attack this
+  submission; it names its own five targets and tells the reviewer not to fix
+  anything.
 
 Every code finding from all three is fixed. The two that were left open needed
 a person and an API key, and both have now been done: the demo video is
