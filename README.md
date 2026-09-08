@@ -511,12 +511,19 @@ adversarially tested should be able to show the adversary's report.
   line with an error-class name.
 - [`RED-TEAM-PROMPT-3.md`](docs/audits/RED-TEAM-PROMPT-3.md) — the prompt used
   for the third pass.
-- [`RED-TEAM-PROMPT-4.md`](docs/audits/RED-TEAM-PROMPT-4.md) — written but not
-  yet run. It aims a fourth pass at the region none of the first three could
-  have covered: the evidence-integrity layer added after audit 3, including
-  `scripts/check_docs.py` itself. Run it cold if you want to attack this
-  submission; it names its own five targets and tells the reviewer not to fix
-  anything.
+- [`RED-TEAM-PROMPT-4.md`](docs/audits/RED-TEAM-PROMPT-4.md) — aimed a fourth
+  pass at the evidence-integrity layer added after audit 3, including
+  `scripts/check_docs.py` itself. It was run by the author against their own
+  work, which is the weak form, and it still found three fail-open holes in
+  that gate plus a mixed measurement that had flattened into a success in three
+  documents. All fixed.
+- [`RED-TEAM-PROMPT-5.md`](docs/audits/RED-TEAM-PROMPT-5.md) — **the current
+  one.** Paste it into a fresh session to attack this submission cold. It is
+  written for convergence: it fixes a green-state regression contract up front,
+  requires every finding to carry its own blast radius and verification
+  command, and asks the reviewer to classify findings as FIX NOW / FIX IF TIME
+  / DO NOT FIX so that a marginal improvement cannot break a green build the
+  night before a deadline.
 
 Every code finding from all three is fixed. The two that were left open needed
 a person and an API key, and both have now been done: the demo video is
