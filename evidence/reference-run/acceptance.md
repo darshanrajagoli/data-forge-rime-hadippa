@@ -1,10 +1,12 @@
 # Waypoint acceptance run
 
-- Run at: `2026-09-04T11:45:14+0530`
-- Commit: `2808968`
+- Run at: `2026-09-08T23:44:38+0530`
+- Commit: `d5c6b18`
 - Python: `3.12.0`
 - Command: `python evidence/run_acceptance.py`
 - Requires network: **no**. Requires credentials: **no**.
+
+- Harness self-audit: **intact** (6 scenarios, 36 checks, as declared).
 
 | Scenario | Claim | Checks | Result |
 |---|---|---|---|
@@ -76,9 +78,9 @@
 - [x] the value handed over equals a fresh lookup
   - route_eta is deterministic precisely so this is checkable.
 - [x] satisfying the new turn cost zero extra backend calls
-  - backend call count unchanged at 2; the alternative is a second lookup costing about 405ms.
+  - backend call count unchanged at 2; the alternative is a second lookup costing about 411ms.
 - [x] the re-anchor decision itself is effectively free
-  - 0.004ms in-process, against a 405ms round trip.
+  - 0.004ms in-process, against a 411ms round trip.
 - [x] fence accounting balances
 
 ### A5 - The transcript records what was heard, not what was generated
