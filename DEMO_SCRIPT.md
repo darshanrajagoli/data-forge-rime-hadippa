@@ -15,7 +15,7 @@ Run these and do not proceed until all three are clean.
 
 ```bash
 python scripts/preflight.py          # must exit 0
-pytest                               # 628 passed
+pytest                               # 632 passed
 python evidence/run_acceptance.py    # 6/6 scenarios
 ```
 

@@ -652,3 +652,72 @@ def test_generated_evidence_artifacts_do_not_trip_the_checker(tmp_path: Path) ->
     assert check_links(tmp_path) == []
     assert check_placeholders(tmp_path) == []
     assert check_per_file_tests(tmp_path, {"test_a.py": 1}) == []
+
+
+# ----------------------------------- links must point at *committed* files
+
+
+def _git_repo(root: Path) -> None:
+    """A real repository, so ``git ls-files`` has something to say."""
+    import subprocess
+
+    for args in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "t@example.com"],
+        ["git", "config", "user.name", "t"],
+    ):
+        subprocess.run(args, cwd=root, check=True, capture_output=True)
+
+
+def _commit_all(root: Path) -> None:
+    import subprocess
+
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "x"], cwd=root, check=True, capture_output=True
+    )
+
+
+def test_a_link_to_a_generated_file_is_a_finding(tmp_path: Path) -> None:
+    """The bug that turned CI red on the final commit.
+
+    ``evidence/results/README.md`` linked to ``acceptance.md``, which is
+    deliberately gitignored -- four people run the acceptance harness and four
+    runs would collide. The file was in the author's tree because they had run
+    it, so every local check passed and the link was dead for everyone else.
+
+    Existence alone cannot see this. Only ``git ls-files`` can.
+    """
+    _git_repo(tmp_path)
+    write(tmp_path, ".gitignore", "generated.md\n")
+    write(tmp_path, "README.md", "See [the run](generated.md).")
+    _commit_all(tmp_path)
+    write(tmp_path, "generated.md", "produced by a script")  # exists, untracked
+
+    found = check_links(tmp_path)
+    assert checks(found) == ["links"]
+    assert "not committed" in details(found)
+
+
+def test_a_link_to_a_committed_file_is_not(tmp_path: Path) -> None:
+    _git_repo(tmp_path)
+    write(tmp_path, "kept.md", "committed")
+    write(tmp_path, "README.md", "See [the notes](kept.md).")
+    _commit_all(tmp_path)
+    assert check_links(tmp_path) == []
+
+
+def test_a_link_to_a_committed_directory_is_not(tmp_path: Path) -> None:
+    """``docs/audits/`` is a directory link; tracking is by the files inside."""
+    _git_repo(tmp_path)
+    write(tmp_path, "docs/audits/AUDIT-3.md", "report")
+    write(tmp_path, "README.md", "See [the audits](docs/audits/).")
+    _commit_all(tmp_path)
+    assert check_links(tmp_path) == []
+
+
+def test_outside_a_git_repository_only_existence_is_checked(tmp_path: Path) -> None:
+    """A ZIP without .git must still be checkable, not fail every link."""
+    write(tmp_path, "kept.md", "here")
+    write(tmp_path, "README.md", "See [the notes](kept.md).")
+    assert check_links(tmp_path) == []

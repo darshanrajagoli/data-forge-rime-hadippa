@@ -10,7 +10,7 @@ and it adds no numbers.
 
 | File | State | What it means |
 |---|---|---|
-| [`acceptance.md`](acceptance.md) · [`acceptance.json`](acceptance.json) | **current, passing** | 6/6 scenarios, 36 checks. Needs no credentials and no network. Regenerate it yourself with `python evidence/run_acceptance.py`. |
+| `acceptance.md` · `acceptance.json` | **not in a fresh clone** | Deliberately gitignored: `team/WORKFLOW.md` has four people run the harness, and four runs would collide on a file nobody owns. Run `python evidence/run_acceptance.py` and they appear here. The committed copy is [`../reference-run/acceptance.md`](../reference-run/acceptance.md). |
 | [`latency.md`](latency.md) · [`latency.json`](latency.json) | **a failed run** | Empty results table and two `401`s. See below. |
 | [`pronunciation/report.md`](pronunciation/report.md) · [`pronunciation.json`](pronunciation/pronunciation.json) | **text variants only** | `Audio rendered: false`, every verdict `_unverified_`. See below. |
 | `sessions/` | **empty** | Live-session dumps. Nothing here: no live session was recorded to disk. |
@@ -43,12 +43,15 @@ correct thing to hold against this submission.
 ## What you can reproduce right now, with no key
 
 ```bash
-python evidence/run_acceptance.py     # rewrites acceptance.md and .json here
+python evidence/run_acceptance.py     # writes acceptance.md and .json here
 ```
 
-That is the file that carries the central claim, and it is the one that needs
-nothing from us. `evidence/reference-run/` holds a committed copy of the same
-output so you can diff a fresh run against ours.
+That is the artifact carrying the central claim, and it is the one that needs
+nothing from us. Because it is gitignored, a fresh clone will not have it until
+you run that command — which is the point. Diff your run against our committed
+copy in [`../reference-run/`](../reference-run/acceptance.md); they should agree
+on every verdict, and differ only in the timestamp, the commit and the
+sub-millisecond timings.
 
 ## What you would need a key for
 

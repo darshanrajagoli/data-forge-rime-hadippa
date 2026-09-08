@@ -178,8 +178,42 @@ def _strip_code(text: str) -> str:
     return _INLINE_CODE.sub(blank, _FENCE.sub(blank, text))
 
 
+@functools.lru_cache(maxsize=None)
+def _tracked(root: Path) -> frozenset[str]:
+    """Every path git actually tracks, POSIX-style, or empty outside a repo."""
+    proc = subprocess.run(
+        ["git", "ls-files"], cwd=root, capture_output=True, text=True
+    )
+    if proc.returncode != 0:
+        return frozenset()
+    return frozenset(ln.strip() for ln in proc.stdout.splitlines() if ln.strip())
+
+
+def _is_tracked(root: Path, target: Path, tracked: frozenset[str]) -> bool:
+    """True if the target, or anything under it, is committed."""
+    try:
+        rel = target.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:  # outside the repository; existence is all we can check
+        return True
+    return rel in tracked or any(t.startswith(rel + "/") for t in tracked)
+
+
 def check_links(root: Path) -> list[Finding]:
-    """Every local markdown link points at something that exists."""
+    """Every local markdown link points at something a reader will actually have.
+
+    Two conditions, not one. The file has to exist, and it has to be *committed*
+    -- because the thing a judge unzips is the repository, not the working tree
+    of whoever wrote the link.
+
+    That distinction cost a CI round. ``evidence/results/README.md`` linked to
+    ``acceptance.md``, which is deliberately gitignored: ``team/WORKFLOW.md``
+    has four people run the acceptance harness, and four runs would collide on
+    a file nobody owns. It was sitting in the author's tree because they had run
+    the harness, so every local check passed, and the link was dead for
+    everyone else. Checking existence alone cannot see that; checking against
+    ``git ls-files`` can, and now the local run agrees with CI.
+    """
+    tracked = _tracked(root)
     findings: list[Finding] = []
     for f in _markdown_files(root):
         raw = f.read_text(encoding="utf-8")
@@ -192,13 +226,24 @@ def check_links(root: Path) -> list[Finding]:
                 target = m.group(1).strip()
                 if target.startswith(("http://", "https://", "mailto:", "#", "<")):
                     continue
-                if not (f.parent / target).resolve().exists():
+                dest = f.parent / target
+                if not dest.resolve().exists():
                     findings.append(
                         Finding(
                             "links",
                             _rel(root, f),
                             i,
                             f"link target does not exist: {target}",
+                        )
+                    )
+                elif tracked and not _is_tracked(root, dest, tracked):
+                    findings.append(
+                        Finding(
+                            "links",
+                            _rel(root, f),
+                            i,
+                            f"link target exists here but is not committed, so "
+                            f"a fresh clone will not have it: {target}",
                         )
                     )
     return findings
@@ -575,6 +620,113 @@ CHECKS = {
 }
 
 
+# --------------------------------------------------------------------------
+# --fix
+# --------------------------------------------------------------------------
+
+
+def fix_counts(root: Path, actual: dict[str, int]) -> list[str]:
+    """Rewrite the counts that drifted, and report what changed.
+
+    This exists to make the audit-fix loop converge. Adding one test changes
+    the suite total, which is quoted in eleven files plus a per-file table row,
+    and ``check_test_count`` enforces every one of them. Done by hand that is a
+    thirty-edit cascade per round, which is both tedious and a reliable source
+    of new mistakes -- a reviewer who suggests "add a test for X" should not be
+    triggering a documentation rewrite that can itself break.
+
+    Only unambiguous rewrites are made:
+
+    * **Per-file table rows** are keyed by filename, so the right number is
+      known exactly.
+    * **``N of the M``** denominators are the suite total by definition.
+    * **Bare totals** are rewritten only where the same value appears in three
+      or more files. A stale total is quoted everywhere; a one-off module count
+      written bare is local, and rewriting that to the suite total would make
+      the checker pass on a document that had become wrong.
+
+    Deliberately *not* rewritten, because the right value cannot be inferred:
+    mutation target counts (15, 19 and 34 are all valid, so a wrong one gives
+    no clue which was meant) and counts spelled out in words. Both are still
+    reported by the checks.
+
+    Lines under a ``check-docs: allow`` pragma are never touched.
+    """
+    total = sum(actual.values())
+    changes: list[str] = []
+
+    # Which bare values look like a stale total rather than a local count.
+    seen: dict[int, set[str]] = {}
+    for f in _markdown_files(root):
+        text = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(text)
+        for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                continue
+            covered = {
+                p
+                for m in _TEST_SUBSET.finditer(line)
+                for p in range(m.start(), m.end())
+            }
+            for m in _TEST_TOTAL.finditer(line):
+                if m.start(1) in covered:
+                    continue
+                seen.setdefault(int(m.group(1)), set()).add(_rel(root, f))
+    stale_totals = {v for v, files in seen.items() if len(files) >= 3 and v != total}
+
+    for f in _markdown_files(root):
+        rel = _rel(root, f)
+        if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES) or rel in PLACEHOLDER_EXEMPT_FILES:
+            continue
+        text = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(text)
+        out: list[str] = []
+
+        for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                out.append(line)
+                continue
+            before = line
+
+            def row(m: re.Match[str]) -> str:
+                name = m.group(1)
+                if name not in actual or int(m.group(2)) == actual[name]:
+                    return m.group(0)
+                return m.group(0).replace(m.group(2), str(actual[name]), 1)
+
+            line = _TABLE_ROW.sub(row, line)
+
+            def subset(m: re.Match[str]) -> str:
+                if int(m.group(2)) == total:
+                    return m.group(0)
+                return f"{m.group(1)} of the {total}"
+
+            line = _TEST_SUBSET.sub(subset, line)
+
+            covered = {
+                p
+                for m in _TEST_SUBSET.finditer(line)
+                for p in range(m.start(), m.end())
+            }
+
+            def bare(m: re.Match[str]) -> str:
+                if m.start(1) in covered or int(m.group(1)) not in stale_totals:
+                    return m.group(0)
+                return m.group(0).replace(m.group(1), str(total), 1)
+
+            line = _TEST_TOTAL.sub(bare, line)
+
+            if line != before:
+                changes.append(f"{rel}:{i}\n    - {before.strip()}\n    + {line.strip()}")
+            out.append(line)
+
+        new = "\n".join(out) + ("\n" if text.endswith("\n") else "")
+        if new != text:
+            f.write_text(new, encoding="utf-8")
+
+    return changes
+
+
 def run_all(root: Path, skip_collect: bool = False) -> list[Finding]:
     findings = (
         check_links(root)
@@ -592,12 +744,27 @@ def run_all(root: Path, skip_collect: bool = False) -> list[Finding]:
 
 
 def main() -> int:
+    # Findings quote the documents they came from, and those contain em dashes
+    # and arrows. A Windows console defaults to cp1252, where printing one
+    # raises UnicodeEncodeError -- so the checker would crash while reporting a
+    # problem instead of reporting it. Degrade the character, never the report.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):  # pragma: no cover - old/odd streams
+            pass
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--list", action="store_true", help="show checks, run none")
     ap.add_argument(
         "--skip-collect",
         action="store_true",
         help="skip the pytest subprocess (faster; drops the test_count check)",
+    )
+    ap.add_argument(
+        "--fix",
+        action="store_true",
+        help="rewrite drifted counts, then check. Use after adding a test.",
     )
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
@@ -606,6 +773,19 @@ def main() -> int:
         for name, why in CHECKS.items():
             print(f"  {name:16} {why}")
         return 0
+
+    if args.fix:
+        if args.skip_collect:
+            print("--fix needs a collection; drop --skip-collect.", file=sys.stderr)
+            return 2
+        changes = fix_counts(ROOT, collected_per_file(ROOT))
+        if changes:
+            print(f"check_docs --fix: rewrote {len(changes)} line(s).")
+            for c in changes:
+                print("  " + c)
+        else:
+            print("check_docs --fix: nothing to rewrite.")
+        print()
 
     findings = run_all(ROOT, skip_collect=args.skip_collect)
 
