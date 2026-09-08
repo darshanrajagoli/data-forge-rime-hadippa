@@ -20,6 +20,7 @@ that must never be marked ``xfail``.
 
 from __future__ import annotations
 
+import re
 import sys
 import textwrap
 from pathlib import Path
@@ -33,6 +34,7 @@ from check_docs import (  # noqa: E402
     CHECKS,
     REPO_NAME,
     Finding,
+    check_anchors,
     check_clone_dir,
     check_links,
     check_mutation_counts,
@@ -42,10 +44,12 @@ from check_docs import (  # noqa: E402
     check_test_count,
     collected_per_file,
     collected_test_count,
+    fix_counts,
     int_to_words,
     run_all,
     words_to_int,
 )
+from check_docs import _exempt_lines, _markdown_files, _rel  # noqa: E402
 
 
 def write(root: Path, rel: str, text: str) -> Path:
@@ -294,6 +298,44 @@ def test_the_current_total_is_not(tmp_path: Path) -> None:
     assert check_test_count(tmp_path, actual=573) == []
 
 
+@pytest.mark.parametrize("noun", ["tests", "test", "pass", "passes", "passed", "passing"])
+def test_every_inflection_of_pass_is_a_total_claim(noun: str, tmp_path: Path) -> None:
+    """AUDIT-5 finding 3: the README said "628 passes" against a suite of 653.
+
+    It survived four adversarial passes and this very gate, because the noun
+    alternation held ``passed`` and ``passing`` but not ``passes``. Every
+    inflection a person might reasonably type is now covered, and this test is
+    what keeps the next one from being dropped.
+    """
+    write(tmp_path, "README.md", f"pytest reporting 573 {noun} is not evidence")
+    found = check_test_count(tmp_path, actual=580)
+    assert checks(found) == ["test_count"], f"{noun!r} slipped past _TEST_TOTAL"
+    assert "pytest collects 580" in details(found)
+
+
+@pytest.mark.parametrize("noun", ["tests", "test", "pass", "passes", "passed", "passing"])
+def test_no_inflection_fires_when_the_number_is_right(noun: str, tmp_path: Path) -> None:
+    """The other half: widening the nouns must not make correct prose red."""
+    write(tmp_path, "README.md", f"pytest reporting 573 {noun} is not evidence")
+    assert check_test_count(tmp_path, actual=573) == []
+
+
+def test_the_noun_stays_intact_when_fix_rewrites_the_number(tmp_path: Path) -> None:
+    """``--fix`` substitutes only the numeral, so "passes" must survive it.
+
+    ``fix_counts`` rewrites ``m.group(1)`` inside the full match rather than
+    the match itself. Widening the alternation therefore cannot corrupt the
+    surrounding word -- but nothing enforced that, so this does.
+    """
+    for name in ("README.md", "HANDOFF.md", "SUBMISSION.md"):
+        write(tmp_path, name, "the suite reports 573 passes today")
+    fix_counts(tmp_path, actual={"tests/test_x.py": 580})
+    for name in ("README.md", "HANDOFF.md", "SUBMISSION.md"):
+        text = (tmp_path / name).read_text(encoding="utf-8")
+        assert "580 passes" in text, text
+        assert "573" not in text
+
+
 def test_a_subset_claim_is_read_as_a_subset(tmp_path: Path) -> None:
     """"112 of the 573 tests" must not be read as a claim that 112 is the total."""
     write(tmp_path, "docs/ARCHITECTURE.md", "112 of the 573 tests live on this module")
@@ -409,6 +451,7 @@ def test_collection_finds_the_suite() -> None:
 def test_every_named_check_runs() -> None:
     assert set(CHECKS) == {
         "links",
+        "anchors",
         "placeholders",
         "mutation_counts",
         "clone_dir",
@@ -794,3 +837,274 @@ def test_the_pragma_covers_the_spelled_out_check_too(tmp_path: Path) -> None:
         '> The narration says "five hundred and seventy-three tests".',
     )
     assert check_spelled_counts(tmp_path, actual=632) == []
+
+
+# ------------------------------------------- what the pragma is allowed to hide
+
+
+def test_the_pragma_hides_nothing_but_the_recorded_narration() -> None:
+    """A pragma must shadow the video's 573 and no other number.
+
+    AUDIT-5 finding 2 was not a typo. ``SUBMISSION.md`` carried the whole
+    "one discrepancy, flagged rather than hidden" paragraph on a *single line*,
+    with a pragma above it excusing the genuinely-stale 573. Because the pragma
+    suppresses every check on the line it covers, it also excused an
+    accidentally-stale suite total sitting in the same sentence -- inside the
+    one paragraph in the submission whose entire purpose is to prove the
+    numbers are handled scrupulously. Two independent gates were blind to it.
+
+    The structural fix was to split those lines so only the 573 is shadowed.
+    Nothing enforced that split, which means the next person to rewrap a
+    paragraph could silently undo it. This is that enforcement: it reads the
+    real repository, finds every pragma-covered line in the judge-facing
+    documents, and fails if any of them hides a three-digit number that is not
+    573. Rewrapping is then safe, because getting it wrong is a red build.
+    """
+    exempt_dirs = ("docs/audits/", "team/")
+    exempt_files = ("VERIFICATION.md",)
+    offenders: list[str] = []
+
+    for path in _markdown_files(ROOT):
+        rel = _rel(ROOT, path)
+        if rel.startswith(exempt_dirs) or rel in exempt_files:
+            continue  # adversarial reports must be able to quote any number
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        for lineno in sorted(_exempt_lines(text)):
+            if lineno > len(lines):
+                continue
+            # An ISO date is not a count. Dates are stripped rather than
+            # allowlisted, so a stale "2026 tests" claim would still be caught.
+            line = re.sub(r"\d{4}-\d{2}-\d{2}", "<date>", lines[lineno - 1])
+            for value in re.findall(r"\b\d{3,}\b", line):
+                if value != "573":
+                    offenders.append(f"{rel}:{lineno} hides {value!r} -- {line.strip()[:90]}")
+
+    assert not offenders, (
+        "a check-docs pragma is shadowing a number other than the recorded "
+        "narration's 573. Move that number onto a line the pragma does not "
+        "cover:\n  " + "\n  ".join(offenders)
+    )
+
+
+# --------------------------------------- per-file counts stated in prose
+
+
+def test_a_drifted_prose_per_file_count_is_a_finding(tmp_path: Path) -> None:
+    """AUDIT-5 finding 2, one level deeper.
+
+    The sentence that exists to prove this submission is scrupulous about
+    numbers said its own per-file count wrong three times running -- 36, then
+    80, then 93 -- while every gate stayed green. No gate reached it: it is not
+    a table row, it is below ``_TEST_TOTAL``'s three-digit floor, and
+    ``_TEST_SUBSET`` validated only its denominator.
+    """
+    write(tmp_path, "SUBMISSION.md", "and the 93 in `tests/test_check_docs.py` were added after")
+    found = check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94})
+    assert checks(found) == ["per_file_tests"]
+    assert "says 93 in test_check_docs.py; pytest collects 94" in details(found)
+
+
+def test_a_correct_prose_per_file_count_is_not(tmp_path: Path) -> None:
+    write(tmp_path, "SUBMISSION.md", "and the 94 in `tests/test_check_docs.py` were added after")
+    assert check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94}) == []
+
+
+def test_the_prose_form_is_checked_in_a_document_with_no_table(tmp_path: Path) -> None:
+    """The table rule bails out early on files with no rows.
+
+    Putting the prose scan after that ``continue`` would have made this rule
+    silently inert in exactly the two documents it was written for -- neither
+    ``SUBMISSION.md`` nor ``DEMO_SCRIPT.md`` carries a per-file table.
+    """
+    write(tmp_path, "DEMO_SCRIPT.md", "> the 93 in `tests/test_check_docs.py` came later")
+    assert checks(check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94})) == [
+        "per_file_tests"
+    ]
+
+
+def test_the_optional_noun_is_accepted(tmp_path: Path) -> None:
+    write(tmp_path, "README.md", "the 93 tests in `tests/test_check_docs.py` came later")
+    assert checks(check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94})) == [
+        "per_file_tests"
+    ]
+
+
+def test_a_prose_count_for_a_file_pytest_does_not_collect_is_a_finding(
+    tmp_path: Path,
+) -> None:
+    write(tmp_path, "README.md", "the 12 in `tests/test_deleted_thing.py` are gone")
+    assert "which pytest does not collect" in details(
+        check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94})
+    )
+
+
+def test_the_prose_rule_does_not_fire_on_a_total_near_a_path(tmp_path: Path) -> None:
+    """Falsification. "Any number near a filename" was tried and rejected.
+
+    A suite total, a fence subset and a bare path reference all sit next to
+    each other in this repository's prose. Requiring a bare "in" as the
+    connector is what keeps the rule from reading them as per-file claims.
+    """
+    write(
+        tmp_path,
+        "README.md",
+        "667 passing, of which 112 are on the fence; see `tests/test_check_docs.py`\n"
+        "and `tests/test_fencing.py` (112 of the 667 tests) for the details.\n"
+        "The fence lives at `src/waypoint/fencing.py`, exercised by 112 cases.\n",
+    )
+    assert check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94}) == []
+
+
+def test_a_pragma_still_excuses_a_prose_per_file_count(tmp_path: Path) -> None:
+    """An audit quoting the wrong number must still be able to say it."""
+    write(
+        tmp_path,
+        "README.md",
+        "<!-- check-docs: allow -- quoting the defect this reports -->\n"
+        "It shipped reading 93 in `tests/test_check_docs.py`, which was wrong.",
+    )
+    assert check_per_file_tests(tmp_path, actual={"test_check_docs.py": 94}) == []
+
+
+def test_fix_repairs_a_prose_per_file_count(tmp_path: Path) -> None:
+    """Detecting it is half the job; the cascade has to stay automated.
+
+    Keyed by filename, so the correct value is known exactly -- this is a
+    table-row-grade rewrite, not the three-file threshold heuristic that bare
+    totals need.
+    """
+    write(tmp_path, "SUBMISSION.md", "and the 93 in `tests/test_check_docs.py` were added")
+    fix_counts(tmp_path, actual={"test_check_docs.py": 94})
+    text = (tmp_path / "SUBMISSION.md").read_text(encoding="utf-8")
+    assert "the 94 in `tests/test_check_docs.py`" in text
+    assert "93" not in text
+
+
+# ---------------------------------------------------------------- anchors
+
+
+def test_a_dead_same_file_anchor_is_a_finding(tmp_path: Path) -> None:
+    """The hazard AUDIT-5 finding 6 named and no gate could see.
+
+    A table-of-contents entry and the heading it points at have to move
+    together. Rename one and GitHub serves the page anyway, dropping the reader
+    at the top with no error -- which is why this survives the skim a judge
+    gives a 25 KB document.
+    """
+    write(
+        tmp_path,
+        "HANDOFF.md",
+        "10. [The adversarial audits](#10-the-adversarial-audits)\n\n"
+        "## 10. The adversarial reviews\n",
+    )
+    found = check_anchors(tmp_path)
+    assert checks(found) == ["anchors"]
+    assert "#10-the-adversarial-audits" in details(found)
+
+
+def test_a_live_same_file_anchor_is_not(tmp_path: Path) -> None:
+    write(
+        tmp_path,
+        "HANDOFF.md",
+        "10. [The adversarial audits](#10-the-adversarial-audits)\n\n"
+        "## 10. The adversarial audits\n",
+    )
+    assert check_anchors(tmp_path) == []
+
+
+def test_spaces_are_hyphenated_one_for_one(tmp_path: Path) -> None:
+    """Runs of whitespace must not collapse. This is the real GitHub rule.
+
+    A dash inside a heading is dropped, leaving the spaces on either side of
+    it, so the anchor carries a double hyphen. Collapsing runs makes every
+    heading with a dash look broken -- the first version of this checker did
+    exactly that and reported a false finding on ``HANDOFF.md`` immediately.
+    """
+    write(
+        tmp_path,
+        "HANDOFF.md",
+        "[go](#9-what-is-not-proven--read-this-first)\n\n"
+        "## 9. What is not proven — read this first\n",
+    )
+    assert check_anchors(tmp_path) == []
+
+
+def test_punctuation_and_formatting_are_dropped_from_the_slug(tmp_path: Path) -> None:
+    write(
+        tmp_path,
+        "README.md",
+        "[go](#the-fence-what-it-is)\n\n### The fence: what it *is*\n",
+    )
+    assert check_anchors(tmp_path) == []
+
+
+def test_a_duplicate_heading_gets_a_numbered_anchor(tmp_path: Path) -> None:
+    """GitHub disambiguates repeats with ``-1``, ``-2``; both must resolve."""
+    write(
+        tmp_path,
+        "README.md",
+        "[first](#results) and [second](#results-1)\n\n"
+        "## Results\ntext\n\n## Results\nmore\n",
+    )
+    assert check_anchors(tmp_path) == []
+
+
+def test_a_cross_file_anchor_is_resolved(tmp_path: Path) -> None:
+    write(tmp_path, "docs/ARCHITECTURE.md", "## The turn fence\n")
+    write(tmp_path, "README.md", "[see](docs/ARCHITECTURE.md#the-turn-fence)\n")
+    assert check_anchors(tmp_path) == []
+
+    write(tmp_path, "README.md", "[see](docs/ARCHITECTURE.md#the-turn-gate)\n")
+    assert checks(check_anchors(tmp_path)) == ["anchors"]
+
+
+def test_an_anchor_into_a_missing_file_belongs_to_the_link_check(
+    tmp_path: Path,
+) -> None:
+    """One defect, one finding. A missing file is ``links``'s to report."""
+    write(tmp_path, "README.md", "[see](docs/GONE.md#anything)\n")
+    assert check_anchors(tmp_path) == []
+    assert checks(check_links(tmp_path)) == ["links"]
+
+
+def test_an_anchor_shown_inside_code_is_not_followed(tmp_path: Path) -> None:
+    write(
+        tmp_path,
+        "README.md",
+        "Write it as `[text](#some-heading)` in the table.\n\n"
+        "```markdown\n[another](#also-missing)\n```\n",
+    )
+    assert check_anchors(tmp_path) == []
+
+
+def test_a_heading_inside_a_fence_does_not_define_an_anchor(tmp_path: Path) -> None:
+    """A ``#`` in a shell example is a comment, not a heading."""
+    write(
+        tmp_path,
+        "README.md",
+        "[go](#install-the-package)\n\n```bash\n# Install the package\n```\n",
+    )
+    assert checks(check_anchors(tmp_path)) == ["anchors"]
+
+
+def test_a_pragma_excuses_an_anchor(tmp_path: Path) -> None:
+    write(
+        tmp_path,
+        "docs/audits/AUDIT-9.md",
+        "<!-- check-docs: allow -- quoting the dead link this reports -->\n"
+        "It shipped as [the audits](#10-the-old-name), which resolves nowhere.\n",
+    )
+    assert check_anchors(tmp_path) == []
+
+
+def test_the_real_repository_has_no_dead_anchors() -> None:
+    """Anchors were a *stated* blind spot, not an unnoticed one.
+
+    ``check_links`` truncates at the ``#`` on purpose and says so. AUDIT-5
+    classified a wording fix as FIX IF TIME partly because renaming a heading
+    would break its table-of-contents entry with nothing to catch it. Thirteen
+    anchor links across twenty-eight documents is a small enough surface that
+    the honest move was to close the gap rather than keep documenting it.
+    """
+    assert check_anchors(ROOT) == []

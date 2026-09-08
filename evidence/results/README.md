@@ -13,6 +13,7 @@ and it adds no numbers.
 | `acceptance.md` · `acceptance.json` | **not in a fresh clone** | Deliberately gitignored: `team/WORKFLOW.md` has four people run the harness, and four runs would collide on a file nobody owns. Run `python evidence/run_acceptance.py` and they appear here. The committed copy is [`../reference-run/acceptance.md`](../reference-run/acceptance.md). |
 | [`latency.md`](latency.md) · [`latency.json`](latency.json) | **a failed run** | Empty results table and two `401`s. See below. |
 | [`pronunciation/report.md`](pronunciation/report.md) · [`pronunciation.json`](pronunciation/pronunciation.json) | **text variants only** | `Audio rendered: false`, every verdict `_unverified_`. See below. |
+| `heard_accuracy.md` · `heard_accuracy.json` | **not in a fresh clone** | Written by `evidence/measure_heard_accuracy.py`, which needs a key. Same story as the latency files: the 2026-09-07 run happened, the output was never copied off the machine. The estimator-error figures it produced are transcribed in [`../../team/MEASUREMENTS.md`](../../team/MEASUREMENTS.md). |
 | `sessions/` | **empty** | Live-session dumps. Nothing here: no live session was recorded to disk. |
 
 ## Why two of these report failure

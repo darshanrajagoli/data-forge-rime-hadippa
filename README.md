@@ -15,13 +15,13 @@
 | **Evidence, claim by claim** | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
 | **The submission** | [`SUBMISSION.md`](SUBMISSION.md) |
 | **Acceptance run** (no credentials, one command) | [`evidence/reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| **Three adversarial audits, kept in full** | [`docs/audits/`](docs/audits/) |
+| **Adversarial audits, kept in full** | [`docs/audits/`](docs/audits/) |
 
 Reproduce the whole offline half on your own machine, with no keys of ours:
 
 ```bash
 pip install -e ".[dev]"
-pytest                               # 653 passed
+pytest                               # 686 passed
 python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
 python evidence/mutation_test.py     # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py  # 19/19 more
@@ -122,7 +122,7 @@ python -m venv .venv
 
 pip install -e ".[dev]"
 
-pytest                                  # 653 tests, ~25s, no network
+pytest                                  # 686 tests, ~25s, no network
 python evidence/run_acceptance.py        # the 6 acceptance scenarios
 ```
 
@@ -233,6 +233,36 @@ implemented, and **pairing it with `coda` fails at startup** rather than
 degrading quietly — a silent no-op is the exact failure this layer exists to
 prevent.
 
+**What the listening test says we should do next, and why we did not do it.**
+The measured result is not "respelling works." It splits by token class, in
+opposite directions, and the split is sharp. Respelling is *load-bearing* for
+digit strings: `mistv2` with no respelling read `gate code 4417` as "four
+thousand four hundred and seventeen", which a driver cannot key into a keypad.
+Respelling is a *net negative* for street names on `coda`: that model read all
+five street fixtures correctly on its own, and respelling made two of them
+worse — Guerrero became "juh-rey-ro", Noe became "Now-uh". Shipping one global
+strategy means one of those two results is being ignored, and right now it is
+the second one.
+
+The policy the data actually argues for is per-model and per-token-class:
+**normalise digit strings on every model, and apply the street-name lexicon
+only where plain text is known to fail.** That is a small change rather than a
+rewrite — `render()` already runs the two as separate steps
+([`src/waypoint/pronounce.py`](src/waypoint/pronounce.py)),
+`normalize_numbers_for_ear()` for the numeric path and `apply_lexicon()` for
+the street names, so the change is a model predicate on the second call and a
+matrix row per model.
+
+We scoped it and did not ship it, for one reason we think is the right one:
+**the evidence is a single listener**, who built the lexicon and knew what each
+clip was supposed to say ([`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md),
+"Outside listener: None"). Turning n=1 into a shipped per-model behaviour would
+be over-fitting a product to one person's ear, and it would replace a strategy
+that is wrong in one known way with one that is wrong in ways nobody has
+listened for. The honest state is that we measured our own default, found it
+half-wrong, wrote down which half, and left the change to a second listener.
+That listener is the highest-value work outstanding on this project.
+
 The phoneme column of the lexicon **ships empty on purpose**. Rime's phoneme
 alphabet is its own notation, and writing strings in it from memory would be
 guessing dressed as precision.
@@ -276,7 +306,7 @@ does not need. Saying so is better than shipping a script that fails.
 
 | Module | Role |
 |---|---|
-| [`fencing.py`](src/waypoint/fencing.py) | The turn fence. Pure, no dependencies, 112 of the 653 tests. |
+| [`fencing.py`](src/waypoint/fencing.py) | The turn fence. Pure, no dependencies, 112 of the 686 tests. |
 | [`heard.py`](src/waypoint/heard.py) | Heard-not-said reconciliation from Rime word timestamps. |
 | [`pronounce.py`](src/waypoint/pronounce.py) | Lexicon, number-for-the-ear, model-compatibility gate. |
 | [`agent.py`](src/waypoint/agent.py) | LiveKit wiring. `_read` / `_write` are the fence integration. |
@@ -297,8 +327,8 @@ ignored every marker still could not commit a stale write, because
 | What | Command | Needs a key? | Output |
 |---|---|---|---|
 | The six acceptance scenarios | `python evidence/run_acceptance.py` | no | [`reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Test suite | `pytest` | no | 653 passing |
-| The docs still match the repository | `python scripts/check_docs.py` | no | 6 checks |
+| Test suite | `pytest` | no | 686 passing |
+| The docs still match the repository | `python scripts/check_docs.py` | no | 8 checks |
 | Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | **run 2026-09-07** — [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) |
 | Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | **run 2026-09-07** — [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md) |
 | Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | yes | **run 2026-09-07** — [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) |
@@ -316,7 +346,7 @@ The full claim, acceptance test, procedure and limitations are in
 
 ### The tests are checked too
 
-`pytest` reporting 628 passes is not evidence on its own — a suite that stays
+`pytest` reporting 686 passing is not evidence on its own — a suite that stays
 green when you break the code it guards converts absence of signal into
 confidence. So there are two mutation harnesses, and between them 34 targets:
 
@@ -334,9 +364,11 @@ The second harness exists because the first one had a shape. All fifteen of its
 targets land in code a unit test calls directly, and **9 of the first 12
 mutations written against the wiring layer survived** — including
 `interruption {"enabled": False}`, which disables the only feature this product
-has. All 653 tests, all six acceptance scenarios and the first harness's 15/15
-stayed green with barge-in switched off. `tests/test_wiring.py` and
-`tests/test_preflight.py` were written to close that, and did.
+has. The whole suite as it stood then, all six acceptance scenarios and the
+first harness's 15/15 stayed green with barge-in switched off.
+`tests/test_wiring.py` and `tests/test_preflight.py` were written to close
+that, and they did: mutant **B** of the second harness is that exact flag,
+and it is caught today.
 
 Current result: **15/15 and 19/19 — 34 of 34, none surviving.** Both run in CI.
 
@@ -491,13 +523,13 @@ their fix sites.
 | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) | What the fence does not cover, analysed rather than asserted. |
 | [`docs/DATA.md`](docs/DATA.md) | Where the synthetic manifest comes from. |
 | [`docs/LISTENING_TEST.md`](docs/LISTENING_TEST.md) | The protocol for judging pronunciation by ear. |
-| **[`docs/audits/`](docs/audits/)** | **Three independent adversarial reviews, kept in full.** Each has a header mapping every finding to its fix. See below. |
+| **[`docs/audits/`](docs/audits/)** | **Independent adversarial reviews, kept in full.** Each has a header mapping every finding to its fix. See below. |
 | [`team/`](team/) | Internal working documents and worksheets. Not written for judges. |
 
 ### The audits
 
-This repository ships the three reviews that were run against it, complete,
-including everything they found. That is deliberate. A submission claiming to be
+This repository ships every review that was written up, complete, including
+everything they found. That is deliberate. A submission claiming to be
 adversarially tested should be able to show the adversary's report.
 
 - [`AUDIT-2.md`](docs/audits/AUDIT-2.md) — found ten defects, every one *outside*
@@ -509,6 +541,12 @@ adversarially tested should be able to show the adversary's report.
   vacuous while the whole suite stayed green. It also defeated two of the fixes
   AUDIT-2 had prompted, including a credential scanner blind to a key sharing a
   line with an error-class name.
+- [`AUDIT-5.md`](docs/audits/AUDIT-5.md) — the pre-submission pass, run cold
+  against the finished tree. It confirmed the measurements, the mixed
+  pronunciation result and all six eligibility rules, and found that the
+  documentation gate's own auto-fixer had been silently rewriting a sentence
+  about a fixed moment in the past into a false claim about the present. Its
+  verdict, its DO-NOT-FIX list and the reasoning behind each are kept whole.
 - [`RED-TEAM-PROMPT-3.md`](docs/audits/RED-TEAM-PROMPT-3.md) — the prompt used
   for the third pass.
 - [`RED-TEAM-PROMPT-4.md`](docs/audits/RED-TEAM-PROMPT-4.md) — aimed a fourth
@@ -517,15 +555,14 @@ adversarially tested should be able to show the adversary's report.
   work, which is the weak form, and it still found three fail-open holes in
   that gate plus a mixed measurement that had flattened into a success in three
   documents. All fixed.
-- [`RED-TEAM-PROMPT-5.md`](docs/audits/RED-TEAM-PROMPT-5.md) — **the current
-  one.** Paste it into a fresh session to attack this submission cold. It is
-  written for convergence: it fixes a green-state regression contract up front,
+- [`RED-TEAM-PROMPT-5.md`](docs/audits/RED-TEAM-PROMPT-5.md) — the prompt that
+  produced `AUDIT-5.md`. It is written for convergence: it fixes a green-state regression contract up front,
   requires every finding to carry its own blast radius and verification
   command, and asks the reviewer to classify findings as FIX NOW / FIX IF TIME
   / DO NOT FIX so that a marginal improvement cannot break a green build the
   night before a deadline.
 
-Every code finding from all three is fixed. The two that were left open needed
+Every code finding from every pass is fixed. The two that were left open needed
 a person and an API key, and both have now been done: the demo video is
 recorded, and the Rime scripts were run against a live key on 2026-09-07. What
 did *not* survive that run is the paperwork — the generated reports were never

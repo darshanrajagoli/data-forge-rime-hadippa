@@ -10,7 +10,7 @@
 | **Evidence** | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
 | **Full project explainer** | [`HANDOFF.md`](HANDOFF.md) |
 | **Independent fresh-clone verification** | [`VERIFICATION.md`](VERIFICATION.md) |
-| **Adversarial audits (3, kept in full)** | [`docs/audits/`](docs/audits/) |
+| **Adversarial audits, kept in full** | [`docs/audits/`](docs/audits/) |
 
 ## One-liner
 
@@ -41,7 +41,7 @@ Mechanism: a **turn fence** — a monotonic generation counter with one admissio
 ## Evidence, in one command
 
 ```bash
-pytest                                # 653 tests, ~25s, no credentials
+pytest                                # 686 tests, ~25s, no credentials
 python evidence/run_acceptance.py     # 6/6 scenarios, 36 checks, no credentials
 python evidence/mutation_test.py      # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py   # 19/19 more: wiring, gates, evidence
@@ -52,7 +52,8 @@ python scripts/check_docs.py          # the docs still match the repository
 None of these need a key of ours. That is the point: the central claim is checkable without trusting us.
 
 <!-- check-docs: allow -- the recorded narration really does say 573 -->
-**One discrepancy, flagged rather than hidden.** The demo video was recorded on 2026-09-08, when the suite was 573 tests, and the narration says so out loud. It is 628 here. The 36 new tests are `tests/test_check_docs.py`, added after the fresh-clone verification found documentation defects that nothing was checking for; they guard against exactly that recurring. The video was not re-cut. Both numbers are real, and the "112 on the fence" figure the narration also quotes is unchanged.
+**One discrepancy, flagged rather than hidden.** The demo video was recorded on 2026-09-08, when the suite was 573 tests, and the narration says so out loud.
+The repository reports 686 passing here, and the 113 in `tests/test_check_docs.py` were added after the fresh-clone verification found documentation defects that nothing was checking for; they guard against exactly that recurring. The video was not re-cut. Both numbers are real, and the "112 on the fence" figure the narration also quotes is unchanged.
 
 ## What we measured with Rime, and what we did not
 
@@ -88,7 +89,7 @@ Not measured at all: barge-in to silence at the driver's ear. That needs a live 
 | Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Threat model | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) |
 | Data provenance | [`docs/DATA.md`](docs/DATA.md) |
-| Adversarial audits (3, kept in full) | [`docs/audits/`](docs/audits/) |
+| Adversarial audits, kept in full | [`docs/audits/`](docs/audits/) |
 
 ## Team
 
@@ -113,9 +114,10 @@ Rime's own documentation for model capabilities. The `agent_activity.py`
 behaviour quoted in `RIME_EVIDENCE.md` §6 was read out of the installed package,
 not remembered.
 
-Three adversarial audits were run with AI as the red team, each one told to
-attack the previous result; every finding is kept in full in `docs/audits/`
-alongside the fix, including the two that were embarrassing. All measurements
+Five adversarial passes were run with AI as the red team, each one told to
+attack the previous result; the three that were written up as reports are kept
+in full in `docs/audits/` alongside the fixes, including the findings that were
+embarrassing. All measurements
 and every listening verdict were produced by a person running the committed
 scripts.
 
@@ -128,7 +130,7 @@ scripts.
 | **Problem and necessity of voice — 25%** | A driver legally cannot use a screen. `README.md` opening; Shot 1 of the demo. |
 | **Hard voice engineering — 25%** | `src/waypoint/fencing.py`, and the `_read`/`_write` integration in `agent.py`. `RIME_EVIDENCE.md` §6 states exactly what LiveKit already does, so the contribution is not overclaimed. |
 | **Rime integration and voice experience — 20%** | `build_tts()`; the WebSocket word-timestamp dependency; `pronounce.py` and the Coda/Mist trade-off; exact config table in `README.md`; measured transport comparison in `RIME_EVIDENCE.md` §4. |
-| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 653 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 34 targets, 34 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, three archived adversarial audits with every finding mapped to its fix, and an independent fresh-clone verification in `VERIFICATION.md` whose findings are fixed and now guarded by `scripts/check_docs.py`. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block**. |
+| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 686 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 34 targets, 34 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, archived adversarial audits with every finding mapped to its fix, and an independent fresh-clone verification in `VERIFICATION.md` whose findings are fixed and now guarded by `scripts/check_docs.py`. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block**. |
 | **Demo clarity — 10%** | `DEMO_SCRIPT.md`; the browser fence board makes the withholding visible, which listening alone cannot. |
 
 ## Eligibility self-check
@@ -139,13 +141,13 @@ Every disqualifier in the brief, and where it is ruled out.
 - [x] **Rime is not incidental** — it is the only speech provider, and its word timestamps are a functional dependency of a core feature, not decoration.
 - [x] **A working product path, not static screens** — `python -m waypoint.agent console` runs the whole loop with no browser.
 - [x] **Demo included** — https://youtu.be/EChOFjIuyNM, 4:30, under the 5:00 cap.
-- [x] **No live credential exposed** — `.env.example` holds placeholders only; `scripts/secret_scan.py` (158 of the 653 tests) runs standalone, in preflight and in a pre-commit hook; the browser never receives a key.
+- [x] **No live credential exposed** — `.env.example` holds placeholders only; `scripts/secret_scan.py` (158 of the 686 tests) runs standalone, in preflight and in a pre-commit hook; the browser never receives a key.
 - [x] **No unverified performance number claimed as verified** — every figure in this document carries its boundary, its sample size, its cold/warm label, and the fact that it was hand-transcribed rather than committed as an artifact.
 - [x] **Model / voice / language passes the event preflight** — `coda`/`lyra`/`eng` and `mistv2`/`cove`/`eng` both synthesised successfully against live Rime on 2026-09-07 during the latency and pronunciation runs. `python scripts/preflight.py --offline` passes with the single expected warning; the credentialed run of `preflight.py` itself was not separately recorded.
 
 ## Pre-submit checklist
 
-- [x] `pytest` → 653 passed
+- [x] `pytest` → 686 passed
 - [x] `python evidence/run_acceptance.py` → 6/6 scenarios, 36 checks
 - [x] `python scripts/secret_scan.py` → clean
 - [x] `python scripts/check_docs.py` → clean

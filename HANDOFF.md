@@ -24,7 +24,7 @@ properly takes twenty and replaces a day of archaeology.
 7. [How to run everything](#7-how-to-run-everything)
 8. [What is proven, and how](#8-what-is-proven-and-how)
 9. [What is NOT proven — read this before claiming anything](#9-what-is-not-proven--read-this-before-claiming-anything)
-10. [The three adversarial audits](#10-the-three-adversarial-audits)
+10. [The adversarial audits](#10-the-adversarial-audits)
 11. [What is left to do](#11-what-is-left-to-do)
 12. [Conventions, rules and traps](#12-conventions-rules-and-traps)
 13. [If you are a language model working on this](#13-if-you-are-a-language-model-working-on-this)
@@ -243,7 +243,7 @@ web/
   server.py       Serves the browser console and mints LiveKit JWTs.
   console.html    The demo UI: fence board, heard-not-said panel, latency panel.
 
-tests/            653 tests.
+tests/            686 tests.
 docs/             Architecture, threat model, data, listening-test method, audits.
 team/             Internal. Workflow and worksheets. Not for judges.
 ```
@@ -268,7 +268,7 @@ pip install -e ".[dev]"
 ### The offline half — works on any laptop, no API keys at all
 
 ```bash
-pytest                               # 653 tests, ~25s
+pytest                               # 686 tests, ~25s
 python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
 python evidence/mutation_test.py     # 15/15 deliberate bugs caught  (~6 min)
 python evidence/mutation_test_ii.py  # 19/19 more                    (~4 min)
@@ -307,7 +307,7 @@ python -m waypoint.agent dev    # terminal 2
 This section is the honest inventory. It matters more than it looks, because
 the brief gives 20% to evidence and gives no credit for unverified claims.
 
-**653 tests.** 112 of them are on the fence alone, and 70 of those are seeded
+**686 tests.** 112 of them are on the fence alone, and 70 of those are seeded
 fuzz runs — random orderings of issue / interrupt / resolve / cancel, checking
 after *every single operation* that nothing stale got through. The safety
 assertion is computed independently of the code under test, so it cannot agree
@@ -320,7 +320,7 @@ against the backend's mutation log. A3 proves the in-flight write case is
 reported honestly rather than hidden.
 
 **Two mutation harnesses, 34 targets, 34 caught.** This is the part worth
-understanding. "653 tests pass" is not evidence — a suite that stays green when
+understanding. "686 tests pass" is not evidence — a suite that stays green when
 you break the thing it guards is worse than no suite. So both harnesses
 deliberately break the code (make the fence admit stale results, skip the check
 before an irreversible write, disable barge-in entirely, read gate codes as
@@ -376,13 +376,16 @@ nobody can reproduce, and the brief says so explicitly.
 
 ---
 
-## 10. The three adversarial audits
+## 10. The adversarial audits
 
-The project was reviewed three times by independent adversarial passes, each
-told to tear it apart. All three found real defects. The reports are kept in
+The project was attacked five times by adversarial passes, each told to tear it
+apart, and each pointed at the region its predecessor had no reason to look at.
+Every one found real defects. Three were written up as reports and are kept in
 `docs/audits/` **including everything they found**, which looks reckless and
 is not: they are the best evidence in the repository that the claims elsewhere
-were actually tested.
+were actually tested. Pass 1 predates the report format. Pass 4 was run by the
+author against their own work — the weak form — so its prompt is archived and
+its findings are recorded below rather than dignified as an independent report.
 
 - **AUDIT-2** (`docs/audits/AUDIT-2.md`) — found ten defects, all *outside* the
   tested modules. Its headline: no script in the repository could make a single
@@ -398,14 +401,37 @@ were actually tested.
   scanner that could not see a key sitting on the same line as an error class
   name, which is the exact shape of output this repository already ships.
 
-- The prompt used for the third pass is kept at
-  `docs/audits/RED-TEAM-PROMPT-3.md`, if you want to run a fourth.
+- **Pass 4** (`docs/audits/RED-TEAM-PROMPT-4.md`, no report) — aimed at the
+  evidence-integrity layer that pass 3 had prompted, including
+  `scripts/check_docs.py` itself. Self-run, which is the weak form, and it
+  still found that gate failing **open** three separate ways: a placeholder
+  allowlist that silently excused any document added later, a completeness
+  rule that let a table omit two files, and a file glob blind to `evidence/`.
+  It also caught the mixed pronunciation result flattening into a success in
+  three documents. All fixed.
 
-**The pattern across all three is worth internalising:** each pass found things
+- **AUDIT-5** (`docs/audits/AUDIT-5.md`) — the pre-submission pass, run cold
+  on the finished tree. It cleared the regions everyone worries about: every
+  derived latency figure recomputes, both halves of the mixed pronunciation
+  result survive in all eight places it is cited, no credential exists in any
+  blob in any commit, and all six eligibility rules hold. What it found
+  instead was in the convergence machinery itself — `check_docs.py --fix` had
+  silently rewritten a sentence about a fixed moment in the past into a false
+  claim about the present, five times, and then certified it as correct
+  because the number matched collection. A gate that checks numbers against
+  current reality cannot tell a historical fact from a present-tense claim.
+  Its DO-NOT-FIX list is longer than its FIX-NOW list, deliberately.
+
+- The prompts are kept at `docs/audits/RED-TEAM-PROMPT-3.md`, `-4.md` and
+  `-5.md`. The fifth is the one to reuse: it fixes a green-state regression
+  contract up front and makes every finding carry its own blast radius.
+
+**The pattern across all five is worth internalising:** each pass found things
 in the region the previous one had no reason to look at. Pass 1 looked at tested
 code, pass 2 at untested code beside it, pass 3 at the code that decides whether
-the tests passed. If you are looking for what is still wrong, ask what region
-nobody has named yet.
+the tests passed, pass 4 at the gate pass 3 had prompted, and pass 5 at the
+auto-fixer that keeps all of it consistent. If you are looking for what is still
+wrong, ask what region nobody has named yet.
 
 ---
 

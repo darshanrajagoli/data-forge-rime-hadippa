@@ -94,7 +94,7 @@ Full output, regenerated on every run:
 ### Test suite
 
 ```bash
-pytest        # 653 passed in ~25s
+pytest        # 686 passed in ~25s
 ```
 
 | File | Tests | Covers |
@@ -103,7 +103,7 @@ pytest        # 653 passed in ~25s
 | `test_fencing.py` | **112** | every fence invariant, plus 70 seeded fuzz runs |
 | `test_pronounce.py` | 63 | numbers for the ear, lexicon, model-compatibility gate |
 | `test_wiring.py` | 45 | `build_tts` / `build_session` / `attach_observers` — whether barge-in is on at all |
-| `test_check_docs.py` | 80 | that the documentation still matches the repository |
+| `test_check_docs.py` | 113 | that the documentation still matches the repository |
 | `test_dispatch.py` | 34 | mutation log, stop resolution, synthetic-data guarantees |
 | `test_config.py` | 29 | loud failures, disclosed degradations, secret redaction, endpoint derivation |
 | `test_agent.py` | 28 | the `_read` / `_write` fence integration, and the heard-not-said pipeline end to end |
@@ -257,7 +257,7 @@ installed code rather than recalled:
 
 ### Do the tests mean anything? Mutation testing
 
-"653 tests pass" is not evidence. A suite that stays green when you break the
+"686 tests pass" is not evidence. A suite that stays green when you break the
 code it guards is worse than no suite, because it converts absence of signal
 into confidence. So the claim is checked directly:
 

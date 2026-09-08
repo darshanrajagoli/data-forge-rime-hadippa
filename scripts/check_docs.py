@@ -19,6 +19,11 @@ automated:
   directory deeper, kept its ``../../`` prefixes, and broke the docs job. CI
   went red on two commits and nobody noticed, while the README badge and
   SUBMISSION.md both advertised a green build.
+* ``anchors`` -- a stated blind spot rather than an oversight: the link check
+  truncates at the ``#`` on purpose. A renamed heading silently orphans every
+  table-of-contents entry pointing at it, GitHub serves the page anyway and
+  drops the reader at the top, and AUDIT-5 downgraded a wording fix to FIX IF
+  TIME partly because nothing would catch that mistake.
 * ``placeholders`` -- the demo video link reached ``SUBMISSION.md`` but not
   ``README.md``, whose deliverables table still read ``FILL: unlisted YouTube
   link`` -- the first table a judge sees.
@@ -28,10 +33,15 @@ automated:
   repository does not clone as ``waypoint``, so a judge following the README
   literally failed on the first command.
 * ``test_count`` -- the suite size is quoted in nine files, and the README's
-  module table said "109 tests" for a file that collects 112.
+  module table said "109 tests" for a file that collects 112. It later said
+  "628 passes" while five other lines of the same file said 653, because the
+  noun alternation held ``passed`` and ``passing`` but not ``passes``.
 * ``per_file_tests`` -- RIME_EVIDENCE.md's per-file breakdown had drifted to
   summing 425 against a 609-test suite: two files were hundreds out and a third
-  was missing entirely. It is the primary evidence document.
+  was missing entirely. It is the primary evidence document. The same claim
+  made in prose drifted three times in a row -- 36, 80, 93 -- inside the one
+  paragraph written to prove this submission is careful with numbers, because
+  a two-digit count next to a filename is below every other rule's floor.
 * ``spelled_counts`` -- DEMO_SCRIPT.md narrates the suite size out loud, which
   is where a stale number is least visible and most quoted. It drifted twice
   while every digit check was green, so words are parsed now rather than listed
@@ -46,17 +56,35 @@ The link check used to live inline in ``.github/workflows/ci.yml``, where it
 could not be run locally before pushing and could not be tested. It lives here
 now, and ``tests/test_check_docs.py`` tests it.
 
-Subset counts must be written as ``N of the M`` rather than a bare ``N tests``.
-That is a documentation convention with a purpose: it makes the denominator
-checkable on every line that quotes a fraction of the suite, and it leaves a
-bare count unambiguously meaning the total.
+Two documentation conventions make otherwise-unenforceable numbers checkable.
+Both trade a small constraint on wording for a number that cannot drift:
+
+* Subset counts are written ``N of the M`` rather than a bare ``N tests``, so
+  the denominator is checkable on every line quoting a fraction of the suite --
+  which leaves a bare count unambiguously meaning the total.
+* A per-file count in prose is written ``N in `tests/<file>.py```, so the file
+  it refers to is named in the same span and the right value is known exactly.
+
+Both must sit on one line. ``--fix`` rewrites line by line, so a claim wrapped
+across two lines is neither checked nor repaired.
+
+A number written outside these shapes is not merely unchecked, it is *reliably*
+wrong eventually: every stale count this gate has caught was one no rule could
+see.
 
 **Known blind spots**, stated because a gate nobody knows the limits of is
 worse than a smaller one:
 
-* Anchors are not resolved. ``FILE.md#section`` is verified as far as
-  ``FILE.md`` existing; a dead ``#section`` passes.
+* A count is only checked in the shapes above. A three-digit number followed by
+  some other noun is invisible -- the README shipped "628 passes" against a
+  653-test suite for exactly this reason, and the repair was to add the noun
+  rather than to match any word after a number. AUDIT-5 DNF 1 measured that
+  looser rule at 132 candidate matches in the tracked markdown, most of them
+  not counts at all.
 * External links are never fetched, so a dead URL passes.
+* Anchors are resolved against this repository's headings only. An anchor into
+  a file outside it, or into one this module does not read, is skipped rather
+  than guessed at.
 * The pragma below suppresses every check on the line it covers.
 """
 
@@ -165,9 +193,18 @@ def _exempt_lines(text: str) -> set[int]:
 # links
 # --------------------------------------------------------------------------
 
-#: ``[text](target)``. The ``[^)#]`` stops at a fragment so ``FILE.md#anchor``
-#: is checked as ``FILE.md``; we verify files exist, not that anchors resolve.
-_LINK = re.compile(r"\[[^\]]*\]\(([^)#]+?)\)")
+#: ``[text](target)``, with any ``#fragment`` matched but not captured, so
+#: ``FILE.md#anchor`` is checked as ``FILE.md``.
+#:
+#: The fragment group is not decoration. The previous pattern ended
+#: ``([^)#]+?)\)`` and was documented as "stops at a fragment" -- it does not.
+#: Requiring ``)`` immediately after a run containing no ``#`` means an
+#: anchored link simply never matched, so ``[text](docs/GONE.md#anything)``
+#: pointing at a file that does not exist was reported by nothing at all.
+#: Found by writing a test that asserted the documented behaviour and watching
+#: it fail. A pure ``#anchor`` still does not match here, which is correct:
+#: ``check_anchors`` owns those.
+_LINK = re.compile(r"\[[^\]]*\]\(([^)#]+?)(?:#[^)]*)?\)")
 
 #: Inline and fenced code, stripped before link matching. A link inside a code
 #: span is being *displayed*, not offered for the reader to follow.
@@ -250,6 +287,107 @@ def check_links(root: Path) -> list[Finding]:
                             i,
                             f"link target exists here but is not committed, so "
                             f"a fresh clone will not have it: {target}",
+                        )
+                    )
+    return findings
+
+
+# --------------------------------------------------------------------------
+# anchors
+# --------------------------------------------------------------------------
+
+#: ``## 10. The adversarial audits`` -- the heading text an anchor is built from.
+_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M)
+
+#: ``[text](#anchor)`` and ``[text](FILE.md#anchor)``.
+_ANCHOR_LINK = re.compile(r"\[[^\]]*\]\((?:([^)#]*\.md))?#([^)]+)\)")
+
+
+def _slug(heading: str) -> str:
+    """GitHub's heading-to-anchor rule, as far as this repository needs it.
+
+    Lowercase, drop everything that is not a word character, whitespace or a
+    hyphen, then hyphenate the spaces. Emoji, backticks, bold markers and
+    trailing punctuation all disappear, which is why ``## 10. The adversarial
+    audits`` becomes ``10-the-adversarial-audits``.
+
+    Each space becomes its own hyphen -- runs are *not* collapsed. That is not
+    a detail: ``## 9. What is not proven -- read this`` loses the dash, leaves
+    two spaces behind, and GitHub renders the anchor with two hyphens. A
+    collapsing implementation reports every heading containing a dash as a
+    broken link, which is how this function was written the first time.
+    """
+    s = heading.strip().lower()
+    s = re.sub(r"[^\w\s-]", "", s)
+    return re.sub(r"\s", "-", s.strip())
+
+
+def _slugs(text: str) -> set[str]:
+    """Every anchor a document defines, including GitHub's ``-1`` duplicates."""
+    out: set[str] = set()
+    for m in _HEADING.finditer(_strip_code(text)):
+        base = _slug(m.group(1))
+        if not base:
+            continue
+        if base not in out:
+            out.add(base)
+            continue
+        n = 1
+        while f"{base}-{n}" in out:
+            n += 1
+        out.add(f"{base}-{n}")
+    return out
+
+
+def check_anchors(root: Path) -> list[Finding]:
+    """Every ``#section`` link points at a heading that exists.
+
+    This was a documented blind spot rather than an oversight: ``check_links``
+    deliberately truncates at the ``#`` and verifies only that the file exists.
+    The cost of that showed up in AUDIT-5's finding 6, where renaming a heading
+    would have silently killed the table-of-contents entry pointing at it --
+    the finding was classified FIX IF TIME partly *because* nothing would catch
+    the mistake if the fix were done carelessly.
+
+    A dead anchor fails quietly: GitHub serves the page and drops the reader at
+    the top with no error, so it survives exactly the skim a judge gives a
+    25 KB document. Closing it costs one traversal of files already in memory.
+
+    Anchors into files this checker does not read are skipped rather than
+    guessed at, and so are anchors inside code spans -- documentation that
+    *displays* a link is not offering one.
+    """
+    docs = {_rel(root, f): f.read_text(encoding="utf-8") for f in _markdown_files(root)}
+    slugs = {rel: _slugs(text) for rel, text in docs.items()}
+
+    findings: list[Finding] = []
+    for rel, raw in docs.items():
+        exempt = _exempt_lines(raw)
+        for i, line in enumerate(_strip_code(raw).splitlines(), start=1):
+            if i in exempt:
+                continue
+            for m in _ANCHOR_LINK.finditer(line):
+                target, anchor = m.group(1), m.group(2).strip()
+                if target:
+                    dest = (root / rel).parent / target
+                    try:
+                        key = _rel(root, dest.resolve())
+                    except ValueError:
+                        continue  # outside the repository; check_links owns it
+                    if key not in slugs:
+                        continue  # missing file is check_links's finding, not ours
+                else:
+                    key = rel
+                if anchor.lower() not in slugs[key]:
+                    where = f"{target}#{anchor}" if target else f"#{anchor}"
+                    findings.append(
+                        Finding(
+                            "anchors",
+                            rel,
+                            i,
+                            f"link to {where} has no matching heading in "
+                            f"{key}. Renaming a heading breaks every link to "
+                            f"it, and the browser gives no error.",
                         )
                     )
     return findings
@@ -411,7 +549,18 @@ def check_clone_dir(root: Path) -> list[Finding]:
 # --------------------------------------------------------------------------
 
 #: A claim about the size of the whole suite: "573 tests", "573 passed".
-_TEST_TOTAL = re.compile(r"\b(\d{3,})\s+(?:tests?|passed|passing)\b")
+#:
+#: Every inflection of "pass" is listed on purpose. AUDIT-5 finding 3 was a
+#: README line reading "628 passes" against a suite of 653. It survived four
+#: adversarial passes *and* a gate written to catch exactly that, because this
+#: alternation held ``passed`` and ``passing`` but not ``passes``. One letter.
+#:
+#: Extending the list of *nouns* is cheap and safe -- this one was verified
+#: against every tracked markdown file to add no new findings before it was
+#: made. Extending it to "any word after a three-digit number" is neither, and
+#: AUDIT-5 DNF 1 says why: the tracked markdown holds 132 such numbers and most
+#: of them are not suite totals. Add nouns here; do not loosen the shape.
+_TEST_TOTAL = re.compile(r"\b(\d{3,})\s+(?:tests?|pass|passes|passed|passing)\b")
 
 #: A claim about part of it: "112 of the 573 tests", "70 of them".
 #:
@@ -608,7 +757,19 @@ def check_test_count(root: Path, actual: int) -> list[Finding]:
 
             # Spans already accounted for by a subset match are not also total
             # claims -- "112 of the 573 tests" must not read as "573 tests".
-            covered = {p for m in subsets for p in range(m.start(), m.end())}
+            #
+            # A prose per-file claim is excluded for the same reason, and it
+            # matters as soon as any single test file passes a hundred: "the
+            # 102 tests in `tests/test_check_docs.py`" is a per-file count that
+            # happens to have three digits, and without this it would be
+            # reported as a wrong suite total. `check_per_file_tests` owns that
+            # span and validates it against collection for that exact file,
+            # which is strictly stronger than the total rule could be.
+            covered = {
+                p
+                for m in (*subsets, *_PROSE_PER_FILE.finditer(line))
+                for p in range(m.start(), m.end())
+            }
             for m in _TEST_TOTAL.finditer(line):
                 if m.start(1) in covered:
                     continue
@@ -638,6 +799,30 @@ _TABLE_ROW = re.compile(
     r"^\|\s*`(test_[a-z_]+\.py)`\s*\|\s*\*{0,2}(\d+)\*{0,2}\s*\|", re.M
 )
 
+#: The same claim made in prose rather than in a table:
+#:     ...and the 94 in `tests/test_check_docs.py` were added afterwards
+#:
+#: This is a documentation *convention*, in the same spirit as ``N of the M``
+#: for subsets: a per-file count written in prose must use the form
+#: ``N in `tests/<file>.py```, and every occurrence of that form is checked
+#: against collection.
+#:
+#: It exists because one sentence -- the "one discrepancy, flagged rather than
+#: hidden" paragraph, whose whole purpose is to prove this submission is
+#: scrupulous about numbers -- got this count wrong three times in a row while
+#: every gate stayed green. The table rule above could not see it (it is not a
+#: table), ``_TEST_TOTAL`` could not see it (a per-file count is two digits,
+#: below the three-digit floor that keeps module counts from being read as
+#: suite totals), and ``_TEST_SUBSET`` validated only its denominator. A
+#: number that no gate reaches drifts on exactly the schedule you would expect.
+#:
+#: The narrow shape is deliberate. Matching "any number near a filename" would
+#: fire on "112 on the fence" and on suite totals quoted beside a path; that
+#: was tried and rejected. Requiring the connector to be a bare "in" keeps the
+#: rule unambiguous, and ``fix_counts`` repairs it, so adopting it costs a
+#: rewording once and nothing thereafter.
+_PROSE_PER_FILE = re.compile(r"\b(\d+)\s+(?:tests?\s+)?in\s+`tests/(test_[a-z_]+\.py)`")
+
 
 def collected_per_file(root: Path) -> dict[str, int]:
     """Tests collected, per test file."""
@@ -666,6 +851,34 @@ def check_per_file_tests(root: Path, actual: dict[str, int]) -> list[Finding]:
             continue
         text = f.read_text(encoding="utf-8")
         exempt = _exempt_lines(text)
+
+        # Prose claims first: they are independent of whether this file also
+        # carries a table, so they must not be skipped by the `not rows` guard.
+        for m in _PROSE_PER_FILE.finditer(text):
+            line = text.count("\n", 0, m.start()) + 1
+            if line in exempt:
+                continue
+            claimed, name = int(m.group(1)), m.group(2)
+            if name not in actual:
+                findings.append(
+                    Finding(
+                        "per_file_tests",
+                        rel,
+                        line,
+                        f"names {name}, which pytest does not collect",
+                    )
+                )
+            elif claimed != actual[name]:
+                findings.append(
+                    Finding(
+                        "per_file_tests",
+                        rel,
+                        line,
+                        f"says {claimed} in {name}; pytest collects "
+                        f"{actual[name]}",
+                    )
+                )
+
         rows = [
             m for m in _TABLE_ROW.finditer(text)
             if (text.count("\n", 0, m.start()) + 1) not in exempt
@@ -723,11 +936,12 @@ def check_per_file_tests(root: Path, actual: dict[str, int]) -> list[Finding]:
 
 CHECKS = {
     "links": "every local markdown link points at a file that exists",
+    "anchors": "every #section link points at a heading that exists",
     "placeholders": "no FILL:/REPLACE-ME left in anything a judge reads",
     "mutation_counts": "mutation target counts match the harnesses",
     "clone_dir": "the documented clone directory is the real one",
     "test_count": "the quoted suite size matches what pytest collects",
-    "per_file_tests": "a per-file test breakdown matches collection, and is complete",
+    "per_file_tests": "per-file test counts match collection, in tables and in prose",
     "spelled_counts": "a suite size written out in words matches collection too",
 }
 
@@ -775,9 +989,14 @@ def fix_counts(root: Path, actual: dict[str, int]) -> list[str]:
         for i, line in enumerate(text.splitlines(), start=1):
             if i in exempt:
                 continue
+            # Subset spans and prose per-file spans are both owned by other
+            # rules; a bare-total rewrite must not reach inside them.
             covered = {
                 p
-                for m in _TEST_SUBSET.finditer(line)
+                for m in (
+                    *_TEST_SUBSET.finditer(line),
+                    *_PROSE_PER_FILE.finditer(line),
+                )
                 for p in range(m.start(), m.end())
             }
             for m in _TEST_TOTAL.finditer(line):
@@ -808,6 +1027,20 @@ def fix_counts(root: Path, actual: dict[str, int]) -> list[str]:
 
             line = _TABLE_ROW.sub(row, line)
 
+            def prose_file(m: re.Match[str]) -> str:
+                """The prose form of a per-file count, keyed by filename.
+
+                Unambiguous for the same reason the table row is: the file it
+                is talking about is named right there, so the correct value is
+                known exactly rather than inferred from a threshold.
+                """
+                name = m.group(2)
+                if name not in actual or int(m.group(1)) == actual[name]:
+                    return m.group(0)
+                return m.group(0).replace(m.group(1), str(actual[name]), 1)
+
+            line = _PROSE_PER_FILE.sub(prose_file, line)
+
             def subset(m: re.Match[str]) -> str:
                 if int(m.group(2)) == total:
                     return m.group(0)
@@ -815,9 +1048,14 @@ def fix_counts(root: Path, actual: dict[str, int]) -> list[str]:
 
             line = _TEST_SUBSET.sub(subset, line)
 
+            # Subset spans and prose per-file spans are both owned by other
+            # rules; a bare-total rewrite must not reach inside them.
             covered = {
                 p
-                for m in _TEST_SUBSET.finditer(line)
+                for m in (
+                    *_TEST_SUBSET.finditer(line),
+                    *_PROSE_PER_FILE.finditer(line),
+                )
                 for p in range(m.start(), m.end())
             }
 
@@ -853,6 +1091,7 @@ def fix_counts(root: Path, actual: dict[str, int]) -> list[str]:
 def run_all(root: Path, skip_collect: bool = False) -> list[Finding]:
     findings = (
         check_links(root)
+        + check_anchors(root)
         + check_placeholders(root)
         + check_mutation_counts(root)
         + check_clone_dir(root)
