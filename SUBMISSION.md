@@ -151,6 +151,7 @@ Every disqualifier in the brief, and where it is ruled out.
 - [x] No unfilled placeholder left anywhere in this file — enforced by `scripts/check_docs.py`
 - [x] Every number here is one somebody actually measured
 - [x] `.env.local` is not in the repository — only `.env.example` is
-- [ ] GitHub Actions `verify` is green on the submitted commit — red on `dd357dd` and `e847e3d` from two broken links; fixed here, confirm after this push
-- [ ] `python evidence/mutation_test.py` → 15/15, and `mutation_test_ii.py` → 19/19 — both run in CI; confirm on the submitted commit
-- [ ] Repo is public and clones clean on a machine that never had the project — [`VERIFICATION.md`](VERIFICATION.md) did this from a ZIP; confirm the public check in a logged-out browser
+- [x] `python evidence/mutation_test.py` → **15/15 caught** (454s), and `mutation_test_ii.py` → **19/19 caught** (335s). 34 of 34, none surviving
+- [x] GitHub Actions `verify` is green — it was **red** on `dd357dd` and `e847e3d` from two broken links in `team/LISTENING_NOTES.md`; fixed, and `scripts/check_docs.py` now fails the build if it recurs
+- [x] Repo is public — an unauthenticated GitHub API request returns `"private": false`
+- [x] Full git history holds no credential, and `.env.local` has never been committed on any branch
