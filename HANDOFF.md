@@ -89,9 +89,8 @@ repository. There is a credential scanner wired into a git hook. There is a
 preflight script. Every number is labelled with the boundary it was measured
 at, and anything unmeasured says `_unverified_` rather than guessing.
 
-**The one thing that matters most right now:** there is no demo video. That is
-an eligibility failure, not a deduction. Nothing else in this document is worth
-as much as fixing it.
+**The demo video is recorded** — [youtu.be/EChOFjIuyNM](https://youtu.be/EChOFjIuyNM).
+That was the one eligibility failure standing, and it is closed.
 
 ---
 
@@ -244,7 +243,7 @@ web/
   server.py       Serves the browser console and mints LiveKit JWTs.
   console.html    The demo UI: fence board, heard-not-said panel, latency panel.
 
-tests/            573 tests.
+tests/            609 tests.
 docs/             Architecture, threat model, data, listening-test method, audits.
 team/             Internal. Workflow and worksheets. Not for judges.
 ```
@@ -269,7 +268,7 @@ pip install -e ".[dev]"
 ### The offline half — works on any laptop, no API keys at all
 
 ```bash
-pytest                               # 573 tests, ~20s
+pytest                               # 609 tests, ~25s
 python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
 python evidence/mutation_test.py     # 15/15 deliberate bugs caught  (~6 min)
 python evidence/mutation_test_ii.py  # 19/19 more                    (~4 min)
@@ -308,7 +307,7 @@ python -m waypoint.agent dev    # terminal 2
 This section is the honest inventory. It matters more than it looks, because
 the brief gives 20% to evidence and gives no credit for unverified claims.
 
-**573 tests.** 112 of them are on the fence alone, and 70 of those are seeded
+**609 tests.** 112 of them are on the fence alone, and 70 of those are seeded
 fuzz runs — random orderings of issue / interrupt / resolve / cancel, checking
 after *every single operation* that nothing stale got through. The safety
 assertion is computed independently of the code under test, so it cannot agree
@@ -321,7 +320,7 @@ against the backend's mutation log. A3 proves the in-flight write case is
 reported honestly rather than hidden.
 
 **Two mutation harnesses, 34 targets, 34 caught.** This is the part worth
-understanding. "573 tests pass" is not evidence — a suite that stays green when
+understanding. "609 tests pass" is not evidence — a suite that stays green when
 you break the thing it guards is worse than no suite. So both harnesses
 deliberately break the code (make the fence admit stale results, skip the check
 before an irreversible write, disable barge-in entirely, read gate codes as
@@ -342,22 +341,33 @@ above on every push, across Linux and Windows, on Python 3.10 and 3.12, with
 **This is the most important section in this document.** Overclaiming is a
 listed disqualifier, and it is also just wrong.
 
-1. **No audio has ever been synthesised by this codebase.** Not one second.
-   `evidence/results/latency.md` ships with an empty results table and the two
-   `401`s that produced it. `evidence/results/pronunciation/report.md` ships
-   with `Audio rendered: false` and every verdict `_unverified_`. Those files
-   are not placeholders somebody forgot — they are what this repository looks
-   like when it has nothing to report.
+1. **The committed Rime artifacts are still the failed keyless run.** Audio
+   *has* now been synthesised — Akshat ran the latency and pronunciation
+   scripts against a live key on 2026-09-07 — but the generated reports were
+   never uploaded from that machine. So `evidence/results/latency.md` still
+   ships with an empty results table and the two `401`s that produced it, and
+   `evidence/results/pronunciation/report.md` still ships with `Audio rendered:
+   false` and every verdict `_unverified_`. The real numbers are transcribed by
+   hand in [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) and
+   [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md), with that provenance
+   gap stated at the top of both. Hand-transcribed numbers are weaker evidence
+   than a committed artifact. Do not present them as the artifact.
 
 2. **No human has ever spoken to this agent.** Every barge-in claim is proved
    against a Python attribute flipped in a test harness. Whether LiveKit's VAD
    fires correctly on a real interruption, in a real room, is a question only a
-   live session answers.
+   live session answers. The demo video shows the product working; it is not a
+   measurement of VAD behaviour under load.
 
-3. **Nobody has listened to the pronunciation.** Whether "Gough" actually comes
-   out as "Goff" is currently an untested hypothesis about a respelling table.
+3. **The pronunciation verdicts are one listener, and they are mixed.** Akshat
+   listened on 2026-09-07. "Gough" does come out as "Goff". But respelling made
+   *Guerrero* and *Noe* worse on `coda`, and the strongest result for the layer
+   is on `mistv2`, which read `gate code 4417` as "four thousand four hundred
+   and seventeen" without it. One listener, one device, and he knew what each
+   clip was supposed to say. The clips themselves were not committed.
 
-4. **There is no demo video.** Eligibility failure.
+4. ~~There is no demo video.~~ **Recorded** —
+   [youtu.be/EChOFjIuyNM](https://youtu.be/EChOFjIuyNM).
 
 If you are writing anything user-facing about this project — a README, a
 submission form, a pitch — **do not claim any of the four above until someone
@@ -401,16 +411,31 @@ nobody has named yet.
 
 ## 11. What is left to do
 
-Every code finding from every audit is fixed. What remains needs a human, a
-microphone, and a free API key.
+Every code finding from every audit is fixed. The four tasks that needed a
+human, a microphone and a free API key have now been done.
 
-| # | Task | Blocks submission? | Who |
+| # | Task | Done? | By |
 |---|---|---|---|
-| 1 | **Record the 4:30 demo video** following `DEMO_SCRIPT.md` | **YES — eligibility** | see `team/WORKFLOW.md` |
-| 2 | Get a Rime key, run `measure_latency.py`, fill the numbers | No, but it is most of the 20% Rime band | " |
-| 3 | Render the pronunciation corpus and actually listen to it | No | " |
-| 4 | Fresh-clone verification — behave like a judge, write down every place the README lies | No | " |
-| 5 | Fill the `FILL:` blanks in `SUBMISSION.md` and submit | **YES** | " |
+| 1 | **Record the 4:30 demo video** following `DEMO_SCRIPT.md` | ✅ [youtu.be/EChOFjIuyNM](https://youtu.be/EChOFjIuyNM) | Arrya |
+| 2 | Get a Rime key, run `measure_latency.py`, record the numbers | ✅ [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) | Akshat |
+| 3 | Render the pronunciation corpus and actually listen to it | ✅ [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md) | Akshat |
+| 4 | Fresh-clone verification — behave like a judge, write down every place the README lies | ✅ [`VERIFICATION.md`](VERIFICATION.md) | Rahul |
+| 5 | Fix what #4 found, and submit | ✅ fixed; see below | — |
+
+**What #4 found, and where it went.** The fresh-clone verification found three
+README defects: `cd waypoint` (the repository does not clone under that name),
+a Windows-pathed virtualenv activation inside a `bash` fence, and mutation
+target counts of 13 and 28 against harnesses that declare 19 and 34. All three
+are fixed, and `scripts/check_docs.py` now fails the build on each of them
+rather than trusting the next reader to notice.
+
+**Two things remain unrecoverable rather than undone**, and the documents say
+so where they are relevant: the generated `latency.md`/`latency.json` from
+Akshat's run were never uploaded, so `evidence/results/` still holds the
+earlier keyless run that failed with two `401`s; and the pronunciation `.wav`
+clips were listened to locally and never committed. The numbers and verdicts
+are recorded with their method and their provenance gap stated plainly in
+`team/MEASUREMENTS.md` and `team/LISTENING_NOTES.md`.
 
 `team/WORKFLOW.md` splits these across three people with copy-paste
 instructions. `team/START-HERE.md` is the plain-English explainer for that team.

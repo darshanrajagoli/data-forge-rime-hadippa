@@ -11,7 +11,7 @@ Ok team, project is built and on GitHub. Read this once, it's 2 minutes, then we
 
 *What it is:* Waypoint — a voice assistant for delivery drivers. Hands on the wheel, eyes on the road, so they talk to it and it talks back. The clever bit is what happens when you *interrupt* it: normally the assistant finishes reading out an answer to a question you already changed your mind about, and worse, it can complete an action (like "mark delivered") that you just cancelled. Ours catches that and refuses it. That's the whole pitch.
 
-*State of things:* the code is done, tested and audited three separate times. 573 tests, all passing. Nothing left to build.
+*State of things:* the code is done, tested and audited three separate times. 609 tests, all passing. Nothing left to build.
 
 *What's actually left is the human stuff we can't automate:*
 1. Nobody has recorded the demo video — and the rules say *no video = not eligible.* This is the big one.

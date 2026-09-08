@@ -115,6 +115,28 @@ def check_secrets(r: Report) -> None:
         r.ok("no secret in the repository", "scripts/secret_scan.py found nothing")
 
 
+def check_docs(r: Report, skip_collect: bool) -> None:
+    """The documentation still describes this repository.
+
+    Cheap, offline, and it belongs in the gate that decides the demo may be
+    recorded: a judge reads the README before they run anything, and a README
+    that fails on its first command costs more than a slow one.
+    """
+    from check_docs import run_all  # type: ignore[import-not-found]
+
+    findings = run_all(ROOT, skip_collect=skip_collect)
+    if findings:
+        r.fail(
+            "documentation matches the repository",
+            "\n".join(str(f).strip() for f in findings[:10]),
+        )
+    else:
+        r.ok(
+            "documentation matches the repository",
+            "scripts/check_docs.py found nothing",
+        )
+
+
 def check_credentials(r: Report, settings) -> bool:
     missing = settings.missing_keys()
     if missing:
@@ -326,6 +348,9 @@ async def main_async(argv: list[str]) -> int:
         return 1
 
     check_pronunciation(r, settings)
+    # --skip-tests also skips the doc checks that need a pytest collection;
+    # the rest (links, placeholders, counts) still run.
+    check_docs(r, skip_collect=args.skip_tests)
     if not args.skip_tests:
         check_tests(r)
         check_acceptance(r)

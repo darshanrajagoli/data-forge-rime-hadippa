@@ -8,7 +8,7 @@
 
 | | Link |
 |---|---|
-| **Demo video** (4:30) | `FILL: unlisted YouTube link` |
+| **Demo video** (4:30, unlisted) | https://youtu.be/EChOFjIuyNM |
 | **Repository** | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
 | **CI — every claim below, re-run on hardware we do not control** | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) · Linux + Windows × Python 3.10/3.12 · **no secrets block** |
 | **Start here (whole project in one file)** | [`HANDOFF.md`](HANDOFF.md) |
@@ -21,7 +21,7 @@ Reproduce the whole offline half on your own machine, with no keys of ours:
 
 ```bash
 pip install -e ".[dev]"
-pytest                               # 573 passed
+pytest                               # 609 passed
 python evidence/run_acceptance.py    # 6/6 scenarios, 36 checks
 python evidence/mutation_test.py     # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py  # 19/19 more
@@ -112,11 +112,17 @@ The claims about fencing are properties of the application, not of the
 network, so they are verifiable offline:
 
 ```bash
-git clone <this repo> && cd waypoint
-python -m venv .venv && . .venv/Scripts/activate   # Linux/macOS: . .venv/bin/activate
+git clone https://github.com/darshanrajagoli/data-forge-rime-hadippa
+cd data-forge-rime-hadippa
+
+python -m venv .venv
+. .venv/bin/activate           # macOS/Linux
+# .venv\Scripts\Activate.ps1  # Windows PowerShell
+# . .venv/Scripts/activate     # Windows Git Bash
+
 pip install -e ".[dev]"
 
-pytest                                  # 573 tests, ~20s, no network
+pytest                                  # 609 tests, ~25s, no network
 python evidence/run_acceptance.py        # the 6 acceptance scenarios
 ```
 
@@ -270,7 +276,7 @@ does not need. Saying so is better than shipping a script that fails.
 
 | Module | Role |
 |---|---|
-| [`fencing.py`](src/waypoint/fencing.py) | The turn fence. Pure, no dependencies, 109 tests. |
+| [`fencing.py`](src/waypoint/fencing.py) | The turn fence. Pure, no dependencies, 112 of the 609 tests. |
 | [`heard.py`](src/waypoint/heard.py) | Heard-not-said reconciliation from Rime word timestamps. |
 | [`pronounce.py`](src/waypoint/pronounce.py) | Lexicon, number-for-the-ear, model-compatibility gate. |
 | [`agent.py`](src/waypoint/agent.py) | LiveKit wiring. `_read` / `_write` are the fence integration. |
@@ -291,24 +297,32 @@ ignored every marker still could not commit a stale write, because
 | What | Command | Needs a key? | Output |
 |---|---|---|---|
 | The six acceptance scenarios | `python evidence/run_acceptance.py` | no | [`reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
-| Test suite | `pytest` | no | 573 passing |
-| Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | `results/latency.md` |
-| Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | `results/pronunciation/` |
-| Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | yes | `results/heard_accuracy.md` |
-| Barge-in to silence, at the ear | browser console, during a live session | yes | `results/sessions/` |
+| Test suite | `pytest` | no | 609 passing |
+| The docs still match the repository | `python scripts/check_docs.py` | no | 6 checks |
+| Rime time-to-first-audio, cold vs warm | `python evidence/measure_latency.py` | yes | **run 2026-09-07** — [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) |
+| Pronunciation A/B, clips saved | `python evidence/measure_pronunciation.py` | yes | **run 2026-09-07** — [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md) |
+| Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | yes | **run 2026-09-07** — [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) |
+| Barge-in to silence, at the ear | browser console, during a live session | yes | **not measured** |
+
+The three credentialed runs happened on 2026-09-07. Their *generated* reports
+were never uploaded from the machine that produced them, so `evidence/results/`
+still holds an earlier keyless run that failed with two `401`s, and the numbers
+live hand-transcribed in the two `team/` files above with that gap stated at the
+top of each. Headline: **394 ms p50 warm time-to-first-audio** over WebSocket at
+the `server_first_frame` boundary — which is not the driver's ear.
 
 The full claim, acceptance test, procedure and limitations are in
 **[`RIME_EVIDENCE.md`](RIME_EVIDENCE.md)**.
 
 ### The tests are checked too
 
-`pytest` reporting 573 passes is not evidence on its own — a suite that stays
+`pytest` reporting 609 passes is not evidence on its own — a suite that stays
 green when you break the code it guards converts absence of signal into
-confidence. So there are two mutation harnesses, and between them 28 targets:
+confidence. So there are two mutation harnesses, and between them 34 targets:
 
 ```bash
 python evidence/mutation_test.py       # 15 targets, the tested core
-python evidence/mutation_test_ii.py    # 13 targets, everything else
+python evidence/mutation_test_ii.py    # 19 targets, everything else
 ```
 
 Each introduces one specific, plausible bug at a time, runs the whole suite
@@ -320,7 +334,7 @@ The second harness exists because the first one had a shape. All fifteen of its
 targets land in code a unit test calls directly, and **9 of the first 12
 mutations written against the wiring layer survived** — including
 `interruption {"enabled": False}`, which disables the only feature this product
-has. All 573 tests, all six acceptance scenarios and the first harness's 15/15
+has. All 609 tests, all six acceptance scenarios and the first harness's 15/15
 stayed green with barge-in switched off. `tests/test_wiring.py` and
 `tests/test_preflight.py` were written to close that, and did.
 
@@ -492,6 +506,13 @@ adversarially tested should be able to show the adversary's report.
 - [`RED-TEAM-PROMPT-3.md`](docs/audits/RED-TEAM-PROMPT-3.md) — the prompt used
   for the third pass, if you want to run a fourth.
 
-Every code finding from all three is fixed. The two that remain open —
-no demo video, and no audio ever synthesised — need a person and an API key, and
-are stated as limitations 10 and 11 in `RIME_EVIDENCE.md` rather than glossed.
+Every code finding from all three is fixed. The two that were left open needed
+a person and an API key, and both have now been done: the demo video is
+recorded, and the Rime scripts were run against a live key on 2026-09-07. What
+did *not* survive that run is the paperwork — the generated reports were never
+uploaded, so `evidence/results/` still holds the earlier keyless run that failed
+with two `401`s, and the measured numbers live hand-transcribed in
+[`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) and
+[`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md) instead. That is weaker
+evidence than a committed artifact and is labelled as such in both files and in
+limitation 10 of `RIME_EVIDENCE.md`, rather than glossed.

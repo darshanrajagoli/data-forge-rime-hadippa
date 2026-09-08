@@ -1,5 +1,10 @@
 # 🚚 WAYPOINT — THE DO-THIS-NEXT LIST
 
+> ✅ **All three lanes are complete.** Arrya recorded the demo, Akshat ran the
+> measurements and the listening test, Rahul did the fresh-clone verification
+> and everything he found is fixed. Nothing below needs doing again — it is
+> kept as the record of how the work was split.
+
 **You do not need to understand anything. Just do the steps in order.**
 
 Every step tells you three things:
@@ -225,7 +230,7 @@ pytest
 **YOU SHOULD SEE:** About 30 seconds of dots, then:
 
 ```
-573 passed
+609 passed
 ```
 
 **IF NOT:** Go to the **🤖 STUCK?** section.
@@ -237,7 +242,7 @@ pytest
 **DO:** Send to WhatsApp:
 
 ```
-Setup done ✅ 573 passed. Starting Lane <A / B / C>.
+Setup done ✅ 609 passed. Starting Lane <A / B / C>.
 ```
 
 **Now go to your lane below. Ignore the other two lanes completely.**
@@ -768,7 +773,7 @@ wrong, unclear, or assumed something it did not say.**
 ```
 pytest
 ```
-**YOU SHOULD SEE:** `573 passed`
+**YOU SHOULD SEE:** `609 passed`
 
 **Check 2:**
 ```
@@ -855,7 +860,7 @@ If not, do it yourself: click the file → **pencil icon** → replace the text 
 - [ ] You can hear **both** the person and the assistant in it
 - [ ] It says out loud **"Rime"** and shows it on screen
 - [ ] It shows the interruption / stress case
-- [ ] `pytest` → `573 passed`
+- [ ] `pytest` → `609 passed`
 - [ ] `python evidence/run_acceptance.py` → `6/6 scenarios passed`
 - [ ] `python scripts/secret_scan.py` → **`clean`**
 - [ ] No `FILL:` left anywhere in `SUBMISSION.md`
@@ -1011,7 +1016,7 @@ before giving me the next one.
 
 **When you start:**
 ```
-Starting Lane <A/B/C>. Setup done, 573 passed ✅
+Starting Lane <A/B/C>. Setup done, 609 passed ✅
 ```
 
 **When you finish:**

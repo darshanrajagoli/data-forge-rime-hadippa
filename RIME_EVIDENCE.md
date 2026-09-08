@@ -36,8 +36,8 @@ that was never completed.
   (§6).
 - Not a barge-in stop latency figure as a service level. We report what we
   measured, with the boundary and sample size attached.
-- Not that pronunciation is verified intelligible. That is a listening
-  judgement and it is marked `_unverified_` until a human makes it.
+- Not that pronunciation is verified intelligible in general. One listener
+  scored the corpus once (§4); rows nobody has scored stay `_unverified_`.
 
 ---
 
@@ -94,21 +94,23 @@ Full output, regenerated on every run:
 ### Test suite
 
 ```bash
-pytest        # 573 passed in ~6s
+pytest        # 609 passed in ~25s
 ```
 
 | File | Tests | Covers |
 |---|---|---|
+| `test_secret_scan.py` | 158 | real keys in source *and* JSON, the vendor's own class names, and the tree walk itself |
 | `test_fencing.py` | **112** | every fence invariant, plus 70 seeded fuzz runs |
-| `test_secret_scan.py` | 66 | real keys in source *and* JSON, the vendor's own class names, and the tree walk itself |
 | `test_pronounce.py` | 63 | numbers for the ear, lexicon, model-compatibility gate |
+| `test_wiring.py` | 45 | `build_tts` / `build_session` / `attach_observers` — whether barge-in is on at all |
+| `test_check_docs.py` | 36 | that the documentation still matches the repository |
 | `test_dispatch.py` | 34 | mutation log, stop resolution, synthetic-data guarantees |
 | `test_config.py` | 29 | loud failures, disclosed degradations, secret redaction, endpoint derivation |
 | `test_agent.py` | 28 | the `_read` / `_write` fence integration, and the heard-not-said pipeline end to end |
+| `test_acceptance_harness.py` | 27 | the harness itself — that a passing acceptance run could still have failed |
 | `test_heard.py` | 22 | exact and estimated boundaries, chat-text truncation |
 | `test_metrics.py` | 22 | cold/warm and boundary separation |
 | `test_prompts.py` | 22 | that the agent is still told to speak for the ear |
-| `test_wiring.py` | 16 | `build_tts` / `build_session` / `attach_observers` — whether barge-in is on at all |
 | `test_preflight.py` | 11 | the gate that decides the demo may be recorded |
 
 ### The fuzz test is the load-bearing one
@@ -255,7 +257,7 @@ installed code rather than recalled:
 
 ### Do the tests mean anything? Mutation testing
 
-"573 tests pass" is not evidence. A suite that stays green when you break the
+"609 tests pass" is not evidence. A suite that stays green when you break the
 code it guards is worse than no suite, because it converts absence of signal
 into confidence. So the claim is checked directly:
 
@@ -278,7 +280,7 @@ Current result: **15/15 caught.**
 ## 4. Measurements that need Rime
 
 These require credentials, so a judge cannot reproduce them without their own
-keys. Each writes a committed artifact.
+keys.
 
 | What | Command | Boundary | Artifact |
 |---|---|---|---|
@@ -286,6 +288,69 @@ keys. Each writes a committed artifact.
 | Estimator error vs word timestamps | `python evidence/measure_heard_accuracy.py` | in-process | `results/heard_accuracy.md` |
 | Pronunciation A/B with clips | `python evidence/measure_pronunciation.py` | audio saved | `results/pronunciation/` |
 | Barge-in → silence, at the ear | live session, browser console | **`client_playout`** | `results/sessions/` |
+
+### What was actually run, and what came back
+
+The first three were run on 2026-09-07 by Akshat, on Windows over a mobile
+hotspot, against a live Rime key. **The generated artifacts were not committed**
+— they were never uploaded from that machine, so `evidence/results/` still holds
+the earlier keyless run that failed with two `401`s. The numbers below are
+transcribed by hand from the tool output into
+[`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) and
+[`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md).
+
+**Read them as one run on one machine, not as an artifact you can re-open.**
+That is a real weakness in this evidence and it is stated here rather than in a
+footnote. Everything in §3 is the part that needs no trust: it runs offline, on
+your machine, with no key of ours.
+
+`python evidence/measure_latency.py --warm 20 --compare-transport` —
+boundary `server_first_frame`, which is **not** the driver's ear:
+
+| series | warmth | n | p50 (ms) | p95 (ms) | min | max |
+|---|---|---|---|---|---|---|
+| `rime.first_frame.http` | cold | 1 | 1225.63 | 1225.63 | 1225.63 | 1225.63 |
+| `rime.first_frame.http` | warm | 20 | 408.86 | 477.19 | 395.04 | 569.72 |
+| `rime.first_frame.websocket` | cold | 1 | 1346.12 | 1346.12 | 1346.12 | 1346.12 |
+| `rime.first_frame.websocket` | warm | 20 | **394.35** | 429.93 | 379.99 | 432.17 |
+
+Warm, the WebSocket path is 14.5 ms faster at p50 and 47.3 ms faster at p95,
+and its spread is 52 ms against HTTP's 175 ms. Cold, it is 120.5 ms *slower* —
+the upgrade, paid once. **None of that is why it is the default.** It is the
+default because it carries word timestamps, which is what makes sub-claim (c)
+exact rather than estimated. The latency result is a bonus and would not on its
+own justify the choice.
+
+`python evidence/measure_heard_accuracy.py --cuts 12` — how wrong the fallback
+estimator is when word timestamps are unavailable, i.e. on HTTP:
+
+- 48 comparisons, mean absolute error **2.96 words**
+- **over-claimed in 1 of 48** — the estimator thought the driver heard more
+  than they did
+- max absolute error: not recorded, and not recoverable without re-running
+
+Over-claiming is the direction that loses a gate code: the agent believes it
+finished saying a code it was cut off partway through, and never repeats it.
+One in 48 is the argument for the WebSocket path being the default rather than
+an option — on the exact path that error is zero by construction, not small.
+
+**Pronunciation.** Full verdicts in
+[`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md). The result is genuinely
+mixed and both halves are reported:
+
+- On `mistv2`, `gate code 4417` without respelling was read as *"four thousand
+  four hundred and seventeen"* — unusable to a driver at a keypad. Respelling
+  fixes it. This is the case the layer exists for.
+- On `coda`, every one of the five street fixtures was already correct
+  *without* respelling, and two got **worse** with it: Guerrero became
+  "juh-rey-ro", Noe became "Now-uh".
+
+So the respelling layer earns its place on digit strings and is a net negative
+for street names on `coda`. One listener, one device, and he knew what the
+clips were supposed to say. The clips were not committed.
+
+The fourth row — barge-in to silence at the ear — was **not** measured. It
+needs a live session with a microphone and a browser console.
 
 ### Where each stopwatch stops
 
@@ -321,8 +386,14 @@ sentence that trails off quietly.
 ## 5. Reproducing everything
 
 ```bash
-git clone <this repo> && cd waypoint
-python -m venv .venv && . .venv/Scripts/activate
+git clone https://github.com/darshanrajagoli/data-forge-rime-hadippa
+cd data-forge-rime-hadippa
+
+python -m venv .venv
+. .venv/bin/activate           # macOS/Linux
+# .venv\Scripts\Activate.ps1  # Windows PowerShell
+# . .venv/Scripts/activate     # Windows Git Bash
+
 pip install -e ".[dev]"
 
 # No credentials needed:
@@ -448,24 +519,32 @@ id, so the same barge-in observed from three places costs one generation.
 7. **Synthetic data.** No real customer, address, phone number or delivery.
    Street names are real SF streets because the pronunciation corpus needs to
    be genuinely hard. [`docs/DATA.md`](docs/DATA.md).
-8. **Pronunciation intelligibility is unverified without a listener.** Rows in
-   `results/pronunciation/report.md` with an empty verdict column are reported
-   `_unverified_`.
+8. **Pronunciation intelligibility rests on one listener.** Akshat scored the
+   corpus on 2026-09-07 (§4); the verdicts are in
+   [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md), the clips were not
+   committed, and he knew what each clip was supposed to say. The committed
+   `results/pronunciation/report.md` is the earlier keyless run, so its verdict
+   column is still empty and every row still reports `_unverified_`. Two
+   fixtures scored *worse* with respelling than without it.
 9. **Single language, no persistence.** `RIME_LANG=eng`; dispatch state is
    in-memory.
-10. **The audible half of this submission is unmeasured, and the artifacts say
-    so.** Everything in section 3 runs offline against no credential, and it is
-    the part we can prove. The parts that need a Rime key — time-to-first-audio,
-    the transport comparison, and whether the respelling layer actually makes
-    `Gough` and `Guerrero` intelligible to a human ear — have not been run at
-    the time of writing. `evidence/results/latency.md` therefore ships with an
-    empty results table and the two `401`s that produced it;
-    `evidence/results/pronunciation/report.md` ships with `Audio rendered:
-    false` and every verdict `_unverified_`. Those files are not placeholders
-    we forgot to fill. They are what this repository looks like when it has
-    nothing to report, and we would rather claim nothing than a number nobody
-    can reproduce. Anyone with a Rime key can close the gap with two commands,
-    both in section 5.
+10. **The audible half was measured once, and the artifact did not survive the
+    trip.** The parts that need a Rime key — time-to-first-audio, the transport
+    comparison, and whether the respelling layer makes `Gough` and `Guerrero`
+    intelligible to a human ear — were run on 2026-09-07 against a live key,
+    and the results are in §4. But the generated reports were never uploaded
+    from the machine that produced them, so `evidence/results/latency.md` still
+    ships with an empty results table and the two `401`s that produced it, and
+    `evidence/results/pronunciation/report.md` still ships with `Audio
+    rendered: false` and every verdict `_unverified_`. Those files are not
+    placeholders we forgot to fill; they are what this repository looks like
+    when it has nothing to report, and we have left them rather than
+    hand-writing an artifact that would claim a provenance it does not have.
+    **So the numbers in §4 are hand-transcribed from tool output by one person
+    on one machine.** That is weaker than a committed artifact and it is the
+    correct thing to hold against this submission. Everything in §3 is
+    unaffected: it runs offline, on your machine, with no key of ours. Anyone
+    with a Rime key can close the gap with the two commands in §5.
 11. **The turn fence has been proven against a simulator, not a human voice.**
     The six acceptance scenarios drive the real agent code and inject the
     barge-in themselves, which is what makes them reproducible on any machine

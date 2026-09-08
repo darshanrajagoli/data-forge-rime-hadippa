@@ -9,6 +9,7 @@
 | **CI, green on every push** | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) |
 | **Evidence** | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
 | **Full project explainer** | [`HANDOFF.md`](HANDOFF.md) |
+| **Independent fresh-clone verification** | [`VERIFICATION.md`](VERIFICATION.md) |
 | **Adversarial audits (3, kept in full)** | [`docs/audits/`](docs/audits/) |
 
 ## One-liner
@@ -40,7 +41,116 @@ Mechanism: a **turn fence** — a monotonic generation counter with one admissio
 ## Evidence, in one command
 
 ```bash
-pytest                                # 573 tests, ~20s, no credentials
+pytest                                # 609 tests, ~25s, no credentials
 python evidence/run_acceptance.py     # 6/6 scenarios, 36 checks, no credentials
 python evidence/mutation_test.py      # 15/15 deliberate bugs caught
 python evidence/mutation_test_ii.py   # 19/19 more: wiring, gates, evidence
+python scripts/secret_scan.py         # clean
+python scripts/check_docs.py          # the docs still match the repository
+```
+
+None of these need a key of ours. That is the point: the central claim is checkable without trusting us.
+
+## What we measured with Rime, and what we did not
+
+Run on 2026-09-07 against a live Rime key, on Windows over a mobile hotspot. Full method and caveats in [`team/MEASUREMENTS.md`](team/MEASUREMENTS.md) and [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md).
+
+| | result |
+|---|---|
+| Rime time-to-first-audio, WebSocket, **warm**, n=20 | p50 **394.35 ms**, p95 429.93 ms |
+| Rime time-to-first-audio, WebSocket, **cold**, n=1 | 1346.12 ms |
+| WebSocket vs HTTP, warm | 14.5 ms faster at p50, and a 52 ms spread against 175 ms |
+| Heard-not-said estimator error, 48 comparisons | mean 2.96 words; over-claimed in **1 of 48** |
+
+Boundary is `server_first_frame` — the Rime request, queueing and synthesis. **It is not the driver's ear**: it excludes the LiveKit hop, the jitter buffer and the speaker. Cold and warm are reported separately and never averaged.
+
+**Two honest weaknesses, stated rather than buried.**
+
+1. The generated report files were never uploaded from the machine that ran them, so `evidence/results/` still holds an earlier keyless run that failed with two `401`s. The numbers above are hand-transcribed from tool output. That is weaker than a committed artifact and we have not manufactured one to cover it.
+2. The pronunciation result is **mixed**, and both halves are reported. On `mistv2`, `gate code 4417` without respelling came out as *"four thousand four hundred and seventeen"* — unusable at a keypad — and respelling fixes it. But on `coda`, all five street fixtures were already correct without respelling and two got *worse* with it. One listener, one device, who knew what the clips were supposed to say.
+
+Not measured at all: barge-in to silence at the driver's ear. That needs a live session with a microphone.
+
+## Links
+
+| | |
+|---|---|
+| Repository | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
+| Demo video | https://youtu.be/EChOFjIuyNM (4:30, under the 5:00 cap) |
+| CI, green on every push | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) |
+| Project explainer, one file | [`HANDOFF.md`](HANDOFF.md) |
+| Evidence | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
+| Independent verification | [`VERIFICATION.md`](VERIFICATION.md) |
+| Acceptance run | [`evidence/reference-run/acceptance.md`](evidence/reference-run/acceptance.md) |
+| Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Threat model | [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) |
+| Data provenance | [`docs/DATA.md`](docs/DATA.md) |
+| Adversarial audits (3, kept in full) | [`docs/audits/`](docs/audits/) |
+
+## Team
+
+| | Role |
+|---|---|
+| **Darshan Rajagoli** | Product, the turn fence, the test and evidence apparatus |
+| **Arrya Sridhar** | Live run and the demo video |
+| **Akshat Marathe** | Rime latency and transport measurements; the listening test |
+| **Rahul Sudarshan** | Independent fresh-clone verification, acting as a judge; submission |
+
+No mentor involvement.
+
+## AI assistance
+
+Built with AI assistance (Claude) for code, tests and documentation, and used
+throughout rather than for a single pass.
+
+What did **not** come from a model's recall: the turn-fence design, the
+Coda/Mist trade-off, and the measurement-boundary discipline came from reading
+primary sources — the LiveKit Agents 1.7.1 source for interruption handling, and
+Rime's own documentation for model capabilities. The `agent_activity.py`
+behaviour quoted in `RIME_EVIDENCE.md` §6 was read out of the installed package,
+not remembered.
+
+Three adversarial audits were run with AI as the red team, each one told to
+attack the previous result; every finding is kept in full in `docs/audits/`
+alongside the fix, including the two that were embarrassing. All measurements
+and every listening verdict were produced by a person running the committed
+scripts.
+
+---
+
+## How this maps to the judging criteria
+
+| Criterion | Where to look |
+|---|---|
+| **Problem and necessity of voice — 25%** | A driver legally cannot use a screen. `README.md` opening; Shot 1 of the demo. |
+| **Hard voice engineering — 25%** | `src/waypoint/fencing.py`, and the `_read`/`_write` integration in `agent.py`. `RIME_EVIDENCE.md` §6 states exactly what LiveKit already does, so the contribution is not overclaimed. |
+| **Rime integration and voice experience — 20%** | `build_tts()`; the WebSocket word-timestamp dependency; `pronounce.py` and the Coda/Mist trade-off; exact config table in `README.md`; measured transport comparison in `RIME_EVIDENCE.md` §4. |
+| **Evidence and reproducibility — 20%** | `evidence/run_acceptance.py` (no credentials), 609 tests, and **two** mutation harnesses proving the tests would fail if the code broke — 34 targets, 34 caught, 0 survived. Pinned versions, seeded fuzz, measurement boundaries labelled and never averaged, three archived adversarial audits with every finding mapped to its fix, and an independent fresh-clone verification in `VERIFICATION.md` whose findings are fixed and now guarded by `scripts/check_docs.py`. GitHub Actions re-runs it all on every push across Linux and Windows × Python 3.10/3.12, with **no secrets block**. |
+| **Demo clarity — 10%** | `DEMO_SCRIPT.md`; the browser fence board makes the withholding visible, which listening alone cannot. |
+
+## Eligibility self-check
+
+Every disqualifier in the brief, and where it is ruled out.
+
+- [x] **Verifiable Rime integration in the submitted code** — `build_tts()` in `src/waypoint/agent.py`; `livekit-plugins-rime==1.7.1` pinned in `pyproject.toml`.
+- [x] **Rime is not incidental** — it is the only speech provider, and its word timestamps are a functional dependency of a core feature, not decoration.
+- [x] **A working product path, not static screens** — `python -m waypoint.agent console` runs the whole loop with no browser.
+- [x] **Demo included** — https://youtu.be/EChOFjIuyNM, 4:30, under the 5:00 cap.
+- [x] **No live credential exposed** — `.env.example` holds placeholders only; `scripts/secret_scan.py` (158 of the 609 tests) runs standalone, in preflight and in a pre-commit hook; the browser never receives a key.
+- [x] **No unverified performance number claimed as verified** — every figure in this document carries its boundary, its sample size, its cold/warm label, and the fact that it was hand-transcribed rather than committed as an artifact.
+- [x] **Model / voice / language passes the event preflight** — `coda`/`lyra`/`eng` and `mistv2`/`cove`/`eng` both synthesised successfully against live Rime on 2026-09-07 during the latency and pronunciation runs. `python scripts/preflight.py --offline` passes with the single expected warning; the credentialed run of `preflight.py` itself was not separately recorded.
+
+## Pre-submit checklist
+
+- [x] `pytest` → 609 passed
+- [x] `python evidence/run_acceptance.py` → 6/6 scenarios, 36 checks
+- [x] `python scripts/secret_scan.py` → clean
+- [x] `python scripts/check_docs.py` → clean
+- [x] `python scripts/preflight.py --offline` → passes, 1 expected warning
+- [x] Demo is under 5:00 and the link resolves
+- [x] No unfilled placeholder left anywhere in this file — enforced by `scripts/check_docs.py`
+- [x] Every number here is one somebody actually measured
+- [x] `.env.local` is not in the repository — only `.env.example` is
+- [ ] GitHub Actions `verify` is green on the submitted commit — red on `dd357dd` and `e847e3d` from two broken links; fixed here, confirm after this push
+- [ ] `python evidence/mutation_test.py` → 15/15, and `mutation_test_ii.py` → 19/19 — both run in CI; confirm on the submitted commit
+- [ ] Repo is public and clones clean on a machine that never had the project — [`VERIFICATION.md`](VERIFICATION.md) did this from a ZIP; confirm the public check in a logged-out browser

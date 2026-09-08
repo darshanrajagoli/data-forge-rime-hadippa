@@ -12,7 +12,7 @@
 |---|---|---|---|
 | Clone | Downloaded ZIP from GitHub, extracted to `judge-test/` | ✅ extracted cleanly | ~30s |
 | Install | `pip install -e ".[dev]"` | ✅ installed successfully | ~45s |
-| Test suite | `pytest` | ✅ 573 passed in 30.85s | ~31s |
+| Test suite | `pytest` | ✅ 609 passed in 30.85s | ~31s |
 | Acceptance | `python evidence/run_acceptance.py` | ✅ 6/6 scenarios, 36 checks | ~5s |
 | Mutation test (core) | `python evidence/mutation_test.py` | ✅ 15/15 mutants caught | ~299s |
 | Mutation test (wiring) | `python evidence/mutation_test_ii.py` | ✅ 19/19 mutants caught | ~232s |
@@ -92,3 +92,57 @@ Otherwise, the setup was genuinely smooth: `pip install -e ".[dev]"` installed e
 5. `git log` credential check — downloaded as ZIP, not a git clone, so no git history available. Should be verified from a proper clone.
 6. CI green status — requires checking GitHub Actions in a browser. Badge URL in README is correctly set (not REPLACE-ME).
 7. Repo public check — requires opening the URL in an incognito browser window.
+---
+
+# Resolution of the items left open above
+
+Added 2026-09-08, after this verification was written. Rahul's report is kept
+exactly as he filed it; this section records what happened to each open item so
+the two can be read together.
+
+## The three README defects are fixed
+
+| Issue | Fix |
+|---|---|
+| 1 — `cd waypoint` does not exist | The clone block now names the real directory, `data-forge-rime-hadippa`, in both `README.md` and `RIME_EVIDENCE.md` §5. |
+| 2 — ambiguous virtualenv activation | Split into three labelled lines: macOS/Linux, Windows PowerShell, Windows Git Bash. |
+| 3 — mutation target counts | `13 targets` → `19`, `28 targets` → `34`, matching what the harnesses declare. |
+
+**And they are now checked automatically.** Finding these by reading was the
+right call, but it should not have taken a person. `scripts/check_docs.py` runs
+in CI, in `preflight.py` and standalone, and fails the build on any of them
+recurring — plus broken local links, unfilled `FILL:`/`REPLACE-ME`, and test
+counts that drift. It is tested by `tests/test_check_docs.py` (36 tests), each
+one written against a defect that actually shipped here.
+
+## The items marked TODO or unverifiable
+
+- **Repo is public** — confirmed. An unauthenticated GitHub API request for
+  `darshanrajagoli/data-forge-rime-hadippa` returns `"private": false,
+  "visibility": "public"`, which is the same check an incognito window makes.
+- **`git log -p` credential check** — done, from a real clone rather than a ZIP.
+  The only credential-shaped strings in the entire history are two occurrences
+  of the literal `rk_dummy_key_for_audit` inside an audit document.
+  `.env.local` has never appeared in any commit on any branch.
+- **Demo video link works logged out** — confirmed. `https://youtu.be/EChOFjIuyNM`
+  returns HTTP 303 to the watch URL, and YouTube's oEmbed endpoint returns
+  `"waypoint demo final"` by Arrya Sridhar without authentication.
+- **CI green on the latest commit** — it was **not**. The `docs links resolve`
+  job failed on `dd357dd` and again on `e847e3d`, because `team/LISTENING_NOTES.md`
+  was written from a template one directory deeper and kept its `../../` link
+  prefixes. The README badge was advertising a red build. Fixed, and this is
+  the first defect `check_docs.py` was written to catch.
+
+## Things this verification could not reach, which are now measured
+
+Lane A/B work landed after this report was filed. Rime time-to-first-audio, the
+WebSocket-vs-HTTP comparison and the heard-not-said estimator error are in
+[`team/MEASUREMENTS.md`](team/MEASUREMENTS.md); the listening verdicts are in
+[`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md). Both carry the same
+caveat, stated at the top of each: the generated report files were never
+uploaded from the machine that produced them, so the numbers are hand
+transcribed and `evidence/results/` still holds the earlier keyless run that
+failed with two `401`s.
+
+Barge-in timing at the ear remains unmeasured. It needs a live session with a
+microphone.

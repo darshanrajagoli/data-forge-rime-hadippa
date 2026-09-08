@@ -92,7 +92,7 @@ box-ticking exercise, and it is worth saying out loud in the demo.
 
 This is where most hackathon projects lose points, and where we are strongest.
 
-- **573 automated tests.**
+- **609 automated tests.**
 - **Six "acceptance scenarios"** — one command, no API keys needed, that runs
   the whole interruption scenario and checks 36 separate things about it.
 - **34 "mutation tests."** This one is the good one. We deliberately *break the
@@ -117,21 +117,32 @@ than useless. So we proved ours actually bite.
 
 ---
 
-## What is honestly NOT done yet
+## What was NOT done — and what happened to each
 
-Read this bit carefully, because **lying about it would disqualify us** and
-because it is what your work over the next few hours is for.
+All four are now done. Kept here with their outcomes, because what came back is
+more interesting than the list was.
 
-1. **There is no demo video.** The competition says a missing demo makes the
-   submission *ineligible* — not marked down, ineligible. This is the single
-   most important thing left.
-2. **The code has never actually spoken out loud.** Everything above is proved
-   by tests. Nobody has ever run it with a real API key and heard it say a word.
-3. **Nobody has listened to the pronunciation.** It is supposed to say "Gough
-   Street" as *"Goff"* and read a gate code as *"four four one seven"* instead of
-   *"four thousand four hundred seventeen."* We think it does. Nobody has checked
-   with their ears.
-4. **Nobody has tried following our own setup instructions from scratch.**
+1. ~~There is no demo video.~~ **Recorded** by Arrya —
+   [youtu.be/EChOFjIuyNM](https://youtu.be/EChOFjIuyNM), 4:30.
+2. ~~The code has never actually spoken out loud.~~ **It has.** Akshat ran it
+   against a live Rime key on 2026-09-07. Warm time-to-first-audio was 394 ms at
+   p50 over WebSocket. See [`MEASUREMENTS.md`](MEASUREMENTS.md) — including the
+   part where the generated report never got uploaded, so the numbers are
+   hand-transcribed and say so.
+3. ~~Nobody has listened to the pronunciation.~~ **Akshat did, and what we had
+   predicted turned out half right.** We expected it to say "Gough Street" as
+   *"Goff"* and to read a gate code as *"four four one seven"* rather than
+   *"four thousand four hundred and seventeen"*. "Gough" does come out as
+   "Goff". And the gate-code worry was exactly right — on `mistv2`, `gate code
+   4417` really was read as *"four thousand four hundred and seventeen"*, which
+   a driver cannot key. Respelling fixes that. But it also made *Guerrero* and
+   *Noe* **worse** on `coda`, where plain text was already correct. Both halves
+   are reported in [`LISTENING_NOTES.md`](LISTENING_NOTES.md).
+4. ~~Nobody has tried following our own setup instructions from scratch.~~
+   **Rahul did**, from a fresh ZIP on a clean machine, and found three real
+   defects — starting with `cd waypoint`, a directory that does not exist. All
+   three are fixed, and `scripts/check_docs.py` now fails the build if any of
+   them comes back. See [`../VERIFICATION.md`](../VERIFICATION.md).
 
 **The golden rule:** if nobody measured it, we do not claim it. Anywhere you see
 `TODO` or `_unverified_` in this project, that is deliberate and honest. Fill it
