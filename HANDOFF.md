@@ -463,6 +463,18 @@ clips were listened to locally and never committed. The numbers and verdicts
 are recorded with their method and their provenance gap stated plainly in
 `team/MEASUREMENTS.md` and `team/LISTENING_NOTES.md`.
 
+**One thing is genuinely open rather than unrecoverable**, and it is the most
+valuable work remaining on this project: **a second listener.** Every
+pronunciation verdict in `team/LISTENING_NOTES.md` is one person's, and that
+person built the lexicon and knew what each clip was supposed to say. The
+result they recorded is mixed in a way that matters — respelling is
+load-bearing for gate codes on `mistv2` and a net negative for street names on
+`coda` — and it argues for a per-model, per-token-class policy that we scoped
+and deliberately did not ship on n=1. See the Coda/Mist section of the README
+for the reasoning. One person who has never seen the lexicon, scoring the
+`none` arm, would settle it. That is worth more than any further hardening of
+the evidence layer, which is already the best-tested part of this repository.
+
 `team/WORKFLOW.md` splits these across three people with copy-paste
 instructions. `team/START-HERE.md` is the plain-English explainer for that team.
 
