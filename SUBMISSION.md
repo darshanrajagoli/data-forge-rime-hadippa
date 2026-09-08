@@ -4,7 +4,7 @@
 
 | | Link |
 |---|---|
-| **Demo video** (4:30, unlisted) | `FILL: YouTube link` |
+| **Demo video** (4:30, unlisted) | https://youtu.be/EChOFjIuyNM |
 | **Repository** | https://github.com/darshanrajagoli/data-forge-rime-hadippa |
 | **CI, green on every push** | [verify workflow](https://github.com/darshanrajagoli/data-forge-rime-hadippa/actions/workflows/ci.yml) |
 | **Evidence** | [`RIME_EVIDENCE.md`](RIME_EVIDENCE.md) |
