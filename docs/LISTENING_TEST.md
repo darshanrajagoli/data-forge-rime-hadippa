@@ -47,13 +47,22 @@ This page is how to fill that column in. It takes about ten minutes.
 
 ## What counts as a result
 
-A fair statement looks like:
+A fair statement looks like this — which is the real one this project
+produced, kept here as the example precisely because it did **not** come out
+the way we expected:
 
-> Two listeners, wired earbuds. On `coda/lyra`, 4 of 4 hard street fixtures
-> were scored `wrong` under `none` and `correct` under `respell`. Gate codes
-> were `wrong` under `none` (read as quantities) and `correct` under `respell`
-> in 2 of 2. n=8 per arm, one voice, one language — indicative, not a
-> benchmark.
+> One listener, earbuds, one session. On `mistv2/cove`, `gate code 4417` was
+> scored `unclear` under `none` — it was read as "four thousand four hundred
+> and seventeen" — and `correct` under `respell`. On `coda/lyra`, all 5 street
+> fixtures were already `correct` under `none`, and 2 of them (Guerrero, Noe)
+> were scored `unclear` under `respell`, so respelling made them worse. One
+> listener who knew what the clips were supposed to say, one voice, one
+> language — indicative, not a benchmark.
+
+Note the shape of that: it reports a result that cuts against the feature. A
+listening test that only ever confirms the thing you built is not a
+measurement, it is a demo. The full verdicts are in
+[`../team/LISTENING_NOTES.md`](../team/LISTENING_NOTES.md).
 
 What is not fair: reporting a pass rate without saying how many listeners,
 which device, or that it was your own project you were listening to. Say those

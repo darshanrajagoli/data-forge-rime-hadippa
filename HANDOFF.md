@@ -472,7 +472,10 @@ instructions. `team/START-HERE.md` is the plain-English explainer for that team.
 - Rime plugins need `livekit.agents.utils.http_context.open()` when used outside
   the agent worker.
 - Coda **does not support** phoneme brackets. That is why the pronunciation
-  layer respells rather than using IPA — it works on every model.
+  layer respells rather than using IPA — it *runs* on every model. That is a
+  portability claim, not an efficacy one: the one listening pass found it
+  load-bearing for gate codes on `mistv2` and a net negative for street names
+  on `coda`. See [`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md).
 - `AgentSession.__init__` calls `asyncio.get_event_loop()`, so tests touching it
   must be `async def` or they pass alone and fail in a full run.
 - The mutation harnesses edit source in place. **Never run two at once** — there

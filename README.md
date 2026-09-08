@@ -223,7 +223,7 @@ So there are two strategies:
 
 | `WAYPOINT_PRONUNCIATION` | Works on | Trade-off |
 |---|---|---|
-| `respell` **(default)** | every model | Portable; survives a model swap. Slightly coarser than phonemes. |
+| `respell` **(default)** | every model | Portable; survives a model swap. Coarser than phonemes, and **measured as a net negative for street names on `coda`** — see below. |
 | `phoneme` | mistv2, English mistv3 | Exact, but locks the product to mistv2 and silently no-ops elsewhere. |
 | `none` | — | The "before" arm of the pronunciation experiment. |
 
@@ -394,10 +394,16 @@ The full analysis is in [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
    and `Rendered.notes` says so. Filling it means synthesising each word and
    submitting the audio to Rime's phonemize endpoint — work the shipped
    `respell` strategy does not require, so it has not been done.
-4. **Pronunciation intelligibility is not automatically verified.**
-   `measure_pronunciation.py` renders and saves the variants; whether a driver
-   hears the right street is a listening judgement. Rows without a human
-   verdict are reported as `_unverified_`, never as passes.
+4. **Pronunciation intelligibility is not automatically verified, and the one
+   human pass came back mixed.** `measure_pronunciation.py` renders and saves
+   the variants; whether a driver hears the right street is a listening
+   judgement. One listener scored the corpus on 2026-09-07
+   ([`team/LISTENING_NOTES.md`](team/LISTENING_NOTES.md)): respelling was
+   load-bearing for gate codes on `mistv2`, which read `4417` as "four thousand
+   four hundred and seventeen" without it — and a **net negative** for street
+   names on `coda`, where plain text was already correct and Guerrero and Noe
+   got worse. The committed `results/pronunciation/report.md` is an earlier
+   keyless run, so its rows still read `_unverified_`, never as passes.
 5. **Barge-in detection quality is LiveKit's, not ours.** We use
    `interruption.mode="adaptive"` with `min_duration=0.4s`. False-positive
    interruptions from road noise are handled by
