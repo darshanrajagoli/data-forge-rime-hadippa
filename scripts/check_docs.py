@@ -32,6 +32,15 @@ automated:
 * ``per_file_tests`` -- RIME_EVIDENCE.md's per-file breakdown had drifted to
   summing 425 against a 609-test suite: two files were hundreds out and a third
   was missing entirely. It is the primary evidence document.
+* ``spelled_counts`` -- DEMO_SCRIPT.md narrates the suite size out loud, which
+  is where a stale number is least visible and most quoted. It drifted twice
+  while every digit check was green, so words are parsed now rather than listed
+  as a known gap.
+
+``--fix`` rewrites the counts that can be inferred unambiguously, which is what
+keeps an audit-and-fix loop from oscillating: adding one test used to mean
+thirty hand edits across eleven files, each one a chance to introduce the next
+finding.
 
 The link check used to live inline in ``.github/workflows/ci.yml``, where it
 could not be run locally before pushing and could not be tested. It lives here
@@ -45,9 +54,6 @@ bare count unambiguously meaning the total.
 **Known blind spots**, stated because a gate nobody knows the limits of is
 worse than a smaller one:
 
-* Counts spelled out in words are not checked. ``DEMO_SCRIPT.md`` narrates
-  "six hundred and twenty tests" out loud, and this file would not notice if
-  that drifted -- it was caught by hand once already.
 * Anchors are not resolved. ``FILE.md#section`` is verified as far as
   ``FILE.md`` existing; a dead ``#section`` passes.
 * External links are never fetched, so a dead URL passes.
@@ -435,6 +441,111 @@ def _collect_output(root: Path) -> str:
     return proc.stdout
 
 
+# --------------------------------------------------------------------------
+# counts spelled out in words
+# --------------------------------------------------------------------------
+#
+# DEMO_SCRIPT.md narrates the suite size out loud, and a narration is where a
+# stale number is least visible and most quoted -- it is what the presenter
+# says on camera. This drifted silently twice while the digit checks were
+# green, so it is checked now rather than listed as a known gap.
+
+_UNITS = {
+    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19,
+}
+_TENS = {
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
+    "seventy": 70, "eighty": 80, "ninety": 90,
+}
+_ONES_R = {v: k for k, v in _UNITS.items()}
+_TENS_R = {v: k for k, v in _TENS.items()}
+
+#: A spelled-out count immediately followed by a suite-size noun. The noun is
+#: what separates a total from a subset: "a hundred and twelve *of them* are on
+#: the fence" is a fraction and is left alone, exactly as in the digit rule.
+_WORD_TOTAL = re.compile(
+    r"\b((?:a|one|two|three|four|five|six|seven|eight|nine)\s+hundred"
+    r"(?:\s+and)?(?:[\s-]+[a-z]+)*?)\s+(?:tests?|passed|passing|passes)\b",
+    re.IGNORECASE,
+)
+
+
+def words_to_int(phrase: str) -> int | None:
+    """Parse "six hundred and thirty-two". Returns None if it is not a number."""
+    total = 0
+    current = 0
+    saw = False
+    for word in re.split(r"[\s-]+", phrase.strip().lower()):
+        if word in ("and", ""):
+            continue
+        if word == "a":
+            current, saw = 1, True
+        elif word in _UNITS:
+            current, saw = current + _UNITS[word], True
+        elif word in _TENS:
+            current, saw = current + _TENS[word], True
+        elif word == "hundred":
+            current, saw = max(current, 1) * 100, True
+        elif word == "thousand":
+            total, current, saw = total + max(current, 1) * 1000, 0, True
+        else:
+            return None
+    return total + current if saw else None
+
+
+def int_to_words(n: int) -> str:
+    """Render 100-9999 the way the narration reads it."""
+    if not 100 <= n <= 9999:
+        raise ValueError(n)
+    parts = []
+    if n >= 1000:
+        parts.append(f"{_ONES_R[n // 1000]} thousand")
+        n %= 1000
+    if n >= 100:
+        parts.append(f"{_ONES_R[n // 100]} hundred")
+        n %= 100
+    if n:
+        if parts:
+            parts.append("and")
+        if n < 20:
+            parts.append(_ONES_R[n])
+        elif n % 10 == 0:
+            parts.append(_TENS_R[n])
+        else:
+            parts.append(f"{_TENS_R[n - n % 10]}-{_ONES_R[n % 10]}")
+    return " ".join(parts)
+
+
+def check_spelled_counts(root: Path, actual: int) -> list[Finding]:
+    """A suite size spelled out in words matches the one pytest collects."""
+    findings: list[Finding] = []
+    for f in _markdown_files(root):
+        rel = _rel(root, f)
+        if rel.startswith(PLACEHOLDER_EXEMPT_PREFIXES) or rel in PLACEHOLDER_EXEMPT_FILES:
+            continue
+        text = f.read_text(encoding="utf-8")
+        exempt = _exempt_lines(text)
+        for i, line in enumerate(text.splitlines(), start=1):
+            if i in exempt:
+                continue
+            for m in _WORD_TOTAL.finditer(line):
+                claimed = words_to_int(m.group(1))
+                if claimed is not None and claimed != actual:
+                    findings.append(
+                        Finding(
+                            "spelled_counts",
+                            rel,
+                            i,
+                            f'"{m.group(1)}" is {claimed}; pytest collects '
+                            f"{actual} ({int_to_words(actual)})",
+                        )
+                    )
+    return findings
+
+
 def collected_test_count(root: Path) -> int:
     """How many tests pytest actually collects.
 
@@ -617,6 +728,7 @@ CHECKS = {
     "clone_dir": "the documented clone directory is the real one",
     "test_count": "the quoted suite size matches what pytest collects",
     "per_file_tests": "a per-file test breakdown matches collection, and is complete",
+    "spelled_counts": "a suite size written out in words matches collection too",
 }
 
 
@@ -716,6 +828,17 @@ def fix_counts(root: Path, actual: dict[str, int]) -> list[str]:
 
             line = _TEST_TOTAL.sub(bare, line)
 
+            def spelled(m: re.Match[str]) -> str:
+                claimed = words_to_int(m.group(1))
+                if claimed is None or claimed == total:
+                    return m.group(0)
+                words = int_to_words(total)
+                if m.group(1)[:1].isupper():
+                    words = words[:1].upper() + words[1:]
+                return m.group(0).replace(m.group(1), words, 1)
+
+            line = _WORD_TOTAL.sub(spelled, line)
+
             if line != before:
                 changes.append(f"{rel}:{i}\n    - {before.strip()}\n    + {line.strip()}")
             out.append(line)
@@ -740,6 +863,7 @@ def run_all(root: Path, skip_collect: bool = False) -> list[Finding]:
         total = sum(per_file.values()) or collected_test_count(root)
         findings += check_test_count(root, total)
         findings += check_per_file_tests(root, per_file)
+        findings += check_spelled_counts(root, total)
     return findings
 
 
@@ -791,7 +915,7 @@ def main() -> int:
 
     if not findings:
         if not args.quiet:
-            ran = len(CHECKS) - (2 if args.skip_collect else 0)
+            ran = len(CHECKS) - (3 if args.skip_collect else 0)
             print(f"check_docs: clean. {ran} checks passed.")
         return 0
 

@@ -38,10 +38,13 @@ from check_docs import (  # noqa: E402
     check_mutation_counts,
     check_per_file_tests,
     check_placeholders,
+    check_spelled_counts,
     check_test_count,
     collected_per_file,
     collected_test_count,
+    int_to_words,
     run_all,
+    words_to_int,
 )
 
 
@@ -411,6 +414,7 @@ def test_every_named_check_runs() -> None:
         "clone_dir",
         "test_count",
         "per_file_tests",
+        "spelled_counts",
     }
 
 
@@ -721,3 +725,72 @@ def test_outside_a_git_repository_only_existence_is_checked(tmp_path: Path) -> N
     write(tmp_path, "kept.md", "here")
     write(tmp_path, "README.md", "See [the notes](kept.md).")
     assert check_links(tmp_path) == []
+
+
+# ----------------------------------------------- counts spelled out in words
+
+
+@pytest.mark.parametrize(
+    "n", [100, 112, 573, 609, 628, 632, 700, 999, 1000, 1207, 9999]
+)
+def test_number_words_round_trip(n: int) -> None:
+    assert words_to_int(int_to_words(n)) == n
+
+
+@pytest.mark.parametrize(
+    "phrase,expected",
+    [
+        ("six hundred and thirty-two", 632),
+        ("a hundred and twelve", 112),
+        ("five hundred and seventy-three", 573),
+        ("six hundred and nine", 609),
+        ("one thousand two hundred and seven", 1207),
+        ("not a number at all", None),
+    ],
+)
+def test_parsing_the_forms_the_narration_actually_uses(phrase, expected) -> None:
+    assert words_to_int(phrase) == expected
+
+
+def test_a_stale_spelled_out_total_is_a_finding(tmp_path: Path) -> None:
+    """The narration drifted twice while every digit check stayed green.
+
+    It is the number the presenter says on camera, so it is simultaneously the
+    least visible in a diff and the most quoted to a judge.
+    """
+    write(tmp_path, "DEMO_SCRIPT.md", '> "Six hundred and twenty-eight tests."')
+    found = check_spelled_counts(tmp_path, actual=632)
+    assert checks(found) == ["spelled_counts"]
+    assert "is 628" in details(found)
+    assert "six hundred and thirty-two" in details(found)
+
+
+def test_the_current_spelled_out_total_is_not(tmp_path: Path) -> None:
+    write(tmp_path, "DEMO_SCRIPT.md", '> "Six hundred and thirty-two tests."')
+    assert check_spelled_counts(tmp_path, actual=632) == []
+
+
+def test_a_spelled_out_subset_is_left_alone(tmp_path: Path) -> None:
+    """"A hundred and twelve of them are on the fence" is a fraction.
+
+    The noun is what separates the two, exactly as in the digit rule: a total
+    is followed by "tests", a subset by "of them".
+    """
+    write(
+        tmp_path,
+        "DEMO_SCRIPT.md",
+        '> "Six hundred and thirty-two tests. A hundred and twelve of them are\n'
+        '> on the fence alone, and seventy of those are seeded fuzz runs."',
+    )
+    assert check_spelled_counts(tmp_path, actual=632) == []
+
+
+def test_the_pragma_covers_the_spelled_out_check_too(tmp_path: Path) -> None:
+    """The recorded narration says 573 and always will."""
+    write(
+        tmp_path,
+        "DEMO_SCRIPT.md",
+        "<!-- check-docs: allow -- the video really does say this -->\n"
+        '> The narration says "five hundred and seventy-three tests".',
+    )
+    assert check_spelled_counts(tmp_path, actual=632) == []
