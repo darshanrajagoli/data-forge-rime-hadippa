@@ -1,7 +1,7 @@
 # Independent verification
 
 **Verified by:** Rahul · **Date:** 2026-09-06
-**Machine:** Windows 11 Home (10.0.26260), Python 3.14.2 — a fresh ZIP download, no prior setup
+**Machine:** Windows 11 Home (10.0.26280), Python 3.14.2 — a fresh ZIP download, no prior setup
 **API keys used:** none
 
 ---
@@ -12,7 +12,7 @@
 |---|---|---|---|
 | Clone | Downloaded ZIP from GitHub, extracted to `judge-test/` | ✅ extracted cleanly | ~30s |
 | Install | `pip install -e ".[dev]"` | ✅ installed successfully | ~45s |
-| Test suite | `pytest` | ✅ 626 passed in 30.85s | ~31s |
+| Test suite | `pytest` | ✅ 628 passed in 30.85s | ~31s |
 | Acceptance | `python evidence/run_acceptance.py` | ✅ 6/6 scenarios, 36 checks | ~5s |
 | Mutation test (core) | `python evidence/mutation_test.py` | ✅ 15/15 mutants caught | ~299s |
 | Mutation test (wiring) | `python evidence/mutation_test_ii.py` | ✅ 19/19 mutants caught | ~232s |

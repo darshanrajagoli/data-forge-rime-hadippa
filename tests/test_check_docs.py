@@ -616,3 +616,39 @@ def test_a_failed_collection_is_still_reported_loudly_somewhere(
     write(tmp_path, "README.md", "620 tests")
     assert check_per_file_tests(tmp_path, {}) == []
     assert checks(check_test_count(tmp_path, actual=0)) == ["test_count"]
+
+
+def test_evidence_markdown_is_checked_too(tmp_path: Path) -> None:
+    """A third fail-open gap, found by adding a file the checker could not see.
+
+    ``_markdown_files`` globbed the repository root, ``docs/`` and ``team/``.
+    ``evidence/`` was invisible -- which is the directory a judge browses for
+    the artifacts, and where ``evidence/results/README.md`` explains why two
+    committed reports show failures. A broken link in the one document written
+    to prevent confusion would have shipped unnoticed.
+    """
+    write(tmp_path, "evidence/results/README.md", "See [the notes](../../team/GONE.md).")
+    found = check_links(tmp_path)
+    assert checks(found) == ["links"]
+    assert found[0].path == "evidence/results/README.md"
+
+
+def test_generated_evidence_artifacts_do_not_trip_the_checker(tmp_path: Path) -> None:
+    """Including evidence/ must not start firing on committed tool output.
+
+    ``acceptance.md`` and the pronunciation report are generated files full of
+    numbers and table rows. If checking them produced findings, the pressure
+    would be to exclude the directory again rather than to fix anything.
+    """
+    write(
+        tmp_path,
+        "evidence/results/acceptance.md",
+        """
+        - Commit: `abc1234`
+        | **A2** A superseded write never reaches the backend | ... | 6/6 | PASS |
+        | `addr-gough` | coda | none | 1247 Gough Street | - | _unverified_ |
+        """,
+    )
+    assert check_links(tmp_path) == []
+    assert check_placeholders(tmp_path) == []
+    assert check_per_file_tests(tmp_path, {"test_a.py": 1}) == []

@@ -130,6 +130,7 @@ def _markdown_files(root: Path) -> list[Path]:
         sorted(root.glob("*.md"))
         + sorted(root.glob("docs/**/*.md"))
         + sorted(root.glob("team/**/*.md"))
+        + sorted(root.glob("evidence/**/*.md"))
     )
     return [p for p in seen if ".venv" not in p.parts]
 

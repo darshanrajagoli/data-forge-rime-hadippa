@@ -230,7 +230,7 @@ pytest
 **YOU SHOULD SEE:** About 30 seconds of dots, then:
 
 ```
-626 passed
+628 passed
 ```
 
 **IF NOT:** Go to the **🤖 STUCK?** section.
@@ -242,7 +242,7 @@ pytest
 **DO:** Send to WhatsApp:
 
 ```
-Setup done ✅ 626 passed. Starting Lane <A / B / C>.
+Setup done ✅ 628 passed. Starting Lane <A / B / C>.
 ```
 
 **Now go to your lane below. Ignore the other two lanes completely.**
@@ -773,7 +773,7 @@ wrong, unclear, or assumed something it did not say.**
 ```
 pytest
 ```
-**YOU SHOULD SEE:** `626 passed`
+**YOU SHOULD SEE:** `628 passed`
 
 **Check 2:**
 ```
@@ -860,7 +860,7 @@ If not, do it yourself: click the file → **pencil icon** → replace the text 
 - [ ] You can hear **both** the person and the assistant in it
 - [ ] It says out loud **"Rime"** and shows it on screen
 - [ ] It shows the interruption / stress case
-- [ ] `pytest` → `626 passed`
+- [ ] `pytest` → `628 passed`
 - [ ] `python evidence/run_acceptance.py` → `6/6 scenarios passed`
 - [ ] `python scripts/secret_scan.py` → **`clean`**
 - [ ] No `FILL:` left anywhere in `SUBMISSION.md`
@@ -1016,7 +1016,7 @@ before giving me the next one.
 
 **When you start:**
 ```
-Starting Lane <A/B/C>. Setup done, 626 passed ✅
+Starting Lane <A/B/C>. Setup done, 628 passed ✅
 ```
 
 **When you finish:**
